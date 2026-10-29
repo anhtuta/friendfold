@@ -194,7 +194,7 @@ Work:
 - Document `WEB_ORIGIN` and `NEXT_PUBLIC_API_BASE_URL` (or server-only `API_BASE_URL`).
 - Pick and document the styling approach in this phase's PR description and in this doc (update this file).
 
-Scaffold (this slice): Next.js 16 App Router in `frontend/`, `strict` TypeScript, Tailwind v4 ([ADR 0007](../decisions/0007-tailwind-css.md)), root layout `lang="en"` + Inter as the placeholder font. Home and `/health` copy land in following PRs.
+Scaffold: Next.js 16 App Router in `frontend/`, `strict` TypeScript, Tailwind v4 ([ADR 0007](../decisions/0007-tailwind-css.md)), root layout `lang="en"` + Inter as the placeholder font. `/` renders the product name, tagline, and plain-text “Sign in” (no link until feature 02). `/health` follows in the next PR. English copy lives in `frontend/lib/copy.ts` so later i18n does not scrape TSX.
 
 Acceptance:
 
