@@ -16,8 +16,12 @@ export const metadata: Metadata = {
 // Next.js App Router requires a default export from app/layout.tsx.
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} antialiased`}>{children}</body>
+    <html lang="en" className="bg-background text-foreground">
+      <body
+        className={`${inter.className} min-h-screen bg-background text-foreground antialiased`}
+      >
+        {children}
+      </body>
     </html>
   );
 }

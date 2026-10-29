@@ -1,1 +1,23 @@
 @import "tailwindcss";
+
+/* Dark theme tokens (docs/decisions/0008-dark-theme.md). Hex values are the
+   source of truth; lib/themeContrast.test.ts asserts WCAG 2.2 AA contrast of
+   text tokens against --color-background. */
+@theme {
+  --color-background: #10141c;
+  --color-foreground: #f4f6fa;
+  --color-muted: #c5ccd8;
+  --color-subtle: #a3adbd;
+  --color-accent: #8ec5ff;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+}

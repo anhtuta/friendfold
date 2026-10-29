@@ -14,6 +14,6 @@ Stack: Next.js App Router, React, TypeScript. No mobile app ([ADR 0002](docs/dec
 - Route groups match the product: `(auth)` for sign-in/up, `(main)` for the logged-in chrome (feed, profile, friends, notifications).
 - English copy in the UI for MVP. Wrap user-facing strings so Vietnamese can land later (`next-intl` or equivalent, introduced in foundation or a dedicated i18n phase — do not scatter raw strings in dozens of files without a plan).
 - Accessibility: semantic HTML, labels on every input, keyboard-operable menus, `alt` on avatars/covers. Aim for WCAG 2.2 AA on new pages.
-- Styling: **Tailwind CSS** ([ADR 0007](docs/decisions/0007-tailwind-css.md)). Do not add CSS-in-JS or a component library without a new ADR.
+- Styling: **Tailwind CSS** with dark theme tokens in `app/globals.css` ([ADR 0007](docs/decisions/0007-tailwind-css.md), [ADR 0008](docs/decisions/0008-dark-theme.md)). Use `background` / `foreground` / `muted` / `subtle` / `accent` utilities so new screens inherit the default look. Do not add CSS-in-JS or a component library without a new ADR.
 
 Do not add React Native, Expo, or a separate admin SPA; admin review in feature 09 is a route in this same Next.js app, gated by role.

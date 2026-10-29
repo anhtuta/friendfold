@@ -135,7 +135,7 @@ Data minimization: collect email, name, username, optional bio/photos, friendshi
 
 ### Accessibility
 
-New pages target **WCAG 2.2 Level AA**: labeled inputs, keyboard operation, visible focus, sufficient contrast, `alt` on images the user did not author (user-authored images use the post text as accessible name when no alt is provided). Do not ship icon-only buttons without an accessible name.
+New pages target **WCAG 2.2 Level AA**: labeled inputs, keyboard operation, visible focus, sufficient contrast, `alt` on images the user did not author (user-authored images use the post text as accessible name when no alt is provided). Do not ship icon-only buttons without an accessible name. The product UI is **dark by default** ([ADR 0008](decisions/0008-dark-theme.md)); text tokens on the page background meet AA.
 
 ### Internationalization
 

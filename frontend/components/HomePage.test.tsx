@@ -13,6 +13,8 @@ describe("HomePage", () => {
       screen.getByRole("heading", { level: 1, name: productName }),
     ).toBeInTheDocument();
     expect(screen.getByText(tagline)).toBeInTheDocument();
+    expect(screen.getByText(tagline)).toHaveClass("text-muted");
+    expect(screen.getByText(signInLabel)).toHaveClass("text-subtle");
   });
 
   it("shows sign-in as plain text, not a link", () => {
