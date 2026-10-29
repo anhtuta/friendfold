@@ -188,10 +188,10 @@ Decisions / deviations:
 **Status:** Shipped  
 **PR:** split into four stacked PRs (one concern each); merge in this order:
 
-1. Tailwind CSS ADR (docs)
-2. Next.js App Router scaffold
-3. Home page (`/` name + tagline)
-4. `/health` page + `API_BASE_URL` (this PR)
+1. https://github.com/anhtuta/friendfold/pull/8 — Tailwind CSS ([ADR 0007](../decisions/0007-tailwind-css.md))
+2. https://github.com/anhtuta/friendfold/pull/9 — Next.js App Router scaffold
+3. https://github.com/anhtuta/friendfold/pull/10 — home page (`/` name + tagline)
+4. https://github.com/anhtuta/friendfold/pull/11 — `/health` page + `API_BASE_URL` (this PR)
 
 Work:
 
