@@ -19,6 +19,8 @@ Examples: `feat(auth): verify email with one-time token`, `docs(feed): mark phas
 
 Do not put multiple unrelated types in one commit. PR titles match the primary commit type.
 
+**Git LFS:** binary files (images, video, fonts, and other non-text assets) must go through Git LFS (see `.gitattributes`). Do not commit them as regular git blobs.
+
 ## Go
 
 - `gofmt` / `goimports`; `golangci-lint` once it is in CI.

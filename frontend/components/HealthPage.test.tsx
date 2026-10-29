@@ -6,6 +6,7 @@ import {
   healthOk,
   healthUnavailable,
   healthUnreachable,
+  homeNavLabel,
 } from "@/lib/copy";
 import type { ReadyKind } from "@/lib/readyStatus";
 
@@ -23,5 +24,9 @@ describe("HealthPage", () => {
       screen.getByRole("heading", { level: 1, name: healthHeading }),
     ).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(label);
+    expect(screen.getByRole("status")).toHaveClass("text-muted");
+    expect(screen.getByRole("link", { name: homeNavLabel })).toHaveClass(
+      "text-accent",
+    );
   });
 });

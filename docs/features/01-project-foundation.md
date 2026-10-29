@@ -74,7 +74,7 @@ CORS: allow the Next.js origin from env (`WEB_ORIGIN`). Other origins denied.
 | --- | --- |
 | `/` | Product name, tagline, link to sign-in once feature 02 exists (plain text until then) |
 | `/health` | Dev-only status of the API ready check |
-| `app/layout.tsx` | Root HTML, `lang="en"`, placeholder font |
+| `app/layout.tsx` | Root HTML, `lang="en"`, Inter, dark theme tokens on `html`/`body` |
 
 ## Non-functional and scaling considerations
 
@@ -226,7 +226,7 @@ npm run dev
 Decisions / deviations:
 
 - Phase 3 is four PRs, not one, matching the one-concern-per-PR rule.
-- Styling is Tailwind CSS v4 ([ADR 0007](../decisions/0007-tailwind-css.md)).
+- Styling is Tailwind CSS v4 ([ADR 0007](../decisions/0007-tailwind-css.md)). The default look is a dark theme via `@theme` tokens in `frontend/app/globals.css` ([ADR 0008](../decisions/0008-dark-theme.md)).
 - Next.js **16.4** (current `create-next-app`) with App Router. The empty template turns on Cache Components; we left it **off** so placeholder routes do not need `"use cache"` / extra Suspense.
 - Root layout uses Inter (`next/font/google`) as the placeholder font. `app/layout.tsx` and `app/**/page.tsx` use Next's required default export; other modules use named exports.
 - English copy lives in `frontend/lib/copy.ts`. `next-intl` waits until Vietnamese is scheduled.

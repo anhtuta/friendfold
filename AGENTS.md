@@ -73,8 +73,9 @@ Accepted ADRs already in the repo:
 - [0005](docs/decisions/0005-monorepo-layout.md) — monorepo layout
 - [0006](docs/decisions/0006-snowflake-ids.md) — 64-bit Snowflake IDs
 - [0007](docs/decisions/0007-tailwind-css.md) — Tailwind CSS
+- [0008](docs/decisions/0008-dark-theme.md) — dark theme as the default look
 
-Next number is `0008`. Status is `Proposed`, `Accepted`, `Superseded by NNNN`, or `Deprecated`.
+Next number is `0009`. Status is `Proposed`, `Accepted`, `Superseded by NNNN`, or `Deprecated`.
 
 ## (d) API contract first
 
@@ -117,6 +118,8 @@ Next number is `0008`. Status is `Proposed`, `Accepted`, `Superseded by NNNN`, o
 **Conventional Commits:** `type(scope): summary`
 
 Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`. Scopes match modules (`auth`, `profile`, `friend`, `post`, `feed`, `reaction`, `comment`, `notification`, `safety`, `platform`) or `docs`, `web`.
+
+**Git LFS:** Binary files (images, video, fonts, and other non-text assets) must be stored with Git LFS. Track them in `.gitattributes`; do not commit raw binaries as regular git blobs.
 
 **Go:** `gofmt` (and `goimports`). `context.Context` is the first argument. Wrap errors with `%w`. No package-level `init()` that connects to the network. Handlers decode/encode only; business rules live in the module's service. Log with structured fields (`request_id`, `user_id`, `error`), never with `fmt.Println`.
 
