@@ -1,4 +1,4 @@
-// Package httpx is the HTTP kernel: chi router, request IDs, CORS, and health.
+// Package httpx is the HTTP kernel: chi router, request IDs, CORS, health, and ready.
 package httpx
 
 import (
@@ -12,7 +12,7 @@ import (
 )
 
 // NewRouter builds the chi mux for the API process.
-func NewRouter(cfg config.Config, logger *slog.Logger) http.Handler {
+func NewRouter(cfg config.Config, logger *slog.Logger, ready ReadyDeps) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(RequestID)
@@ -20,5 +20,6 @@ func NewRouter(cfg config.Config, logger *slog.Logger) http.Handler {
 	r.Use(CORS(cfg.WebOrigin))
 
 	r.Get("/v1/health", Health)
+	r.Get("/v1/ready", Ready(logger, ready))
 	return r
 }

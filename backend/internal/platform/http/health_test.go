@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -12,13 +13,29 @@ import (
 	"github.com/anhtuta/friendfold/backend/internal/platform/config"
 )
 
+type pingStub struct {
+	err error
+}
+
+func (p pingStub) Ping(context.Context) error {
+	return p.err
+}
+
+func okDeps() ReadyDeps {
+	return ReadyDeps{
+		Write: pingStub{},
+		Read:  pingStub{},
+		Redis: pingStub{},
+	}
+}
+
 func testRouter(logger *slog.Logger) http.Handler {
 	if logger == nil {
 		logger = slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil))
 	}
 	return NewRouter(config.Config{
 		WebOrigin: "http://localhost:3000",
-	}, logger)
+	}, logger, okDeps())
 }
 
 func TestHealthOK(t *testing.T) {

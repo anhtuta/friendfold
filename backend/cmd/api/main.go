@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"github.com/anhtuta/friendfold/backend/internal/platform/config"
+	"github.com/anhtuta/friendfold/backend/internal/platform/db"
 	httpx "github.com/anhtuta/friendfold/backend/internal/platform/http"
 	"github.com/anhtuta/friendfold/backend/internal/platform/id"
 	platformlog "github.com/anhtuta/friendfold/backend/internal/platform/log"
+	redisx "github.com/anhtuta/friendfold/backend/internal/platform/redis"
 )
 
 func main() {
@@ -37,9 +39,31 @@ func run() int {
 		return 1
 	}
 
+	pools, err := db.New(context.Background(), cfg)
+	if err != nil {
+		logger.Error("db pools", slog.String("error", err.Error()))
+		return 1
+	}
+	defer pools.Close()
+
+	rdb, err := redisx.New(cfg.RedisURL)
+	if err != nil {
+		logger.Error("redis client", slog.String("error", err.Error()))
+		return 1
+	}
+	defer func() {
+		if err := rdb.Close(); err != nil {
+			logger.Error("redis close", slog.String("error", err.Error()))
+		}
+	}()
+
 	srv := &http.Server{
-		Addr:              cfg.APIAddr,
-		Handler:           httpx.NewRouter(cfg, logger),
+		Addr: cfg.APIAddr,
+		Handler: httpx.NewRouter(cfg, logger, httpx.ReadyDeps{
+			Write: pools.Write,
+			Read:  pools.Read,
+			Redis: rdb,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
