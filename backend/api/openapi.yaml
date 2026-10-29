@@ -1,0 +1,65 @@
+openapi: 3.1.0
+info:
+  title: Friendfold API
+  version: 0.1.0
+  description: |
+    HTTP API for Friendfold. All paths are versioned under `/v1`.
+    Resource IDs are Snowflake 64-bit integers serialized as decimal strings.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+paths:
+  /v1/health:
+    get:
+      operationId: getHealth
+      summary: Process liveness
+      description: |
+        Returns 200 when the API process is up. Does not check Postgres or Redis.
+      security: []
+      responses:
+        "200":
+          description: Process is alive
+          headers:
+            X-Request-Id:
+              description: Echoed or generated request correlation id
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          const: ok
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          $ref: "#/components/schemas/Error"
