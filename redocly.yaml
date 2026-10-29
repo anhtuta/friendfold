@@ -1,7 +1,8 @@
 # OpenAPI 3.1 lint for backend/api/openapi.yaml.
 # recommended is the default ruleset; the offs match foundation probes
-# (no product license yet, local-only server, no 4xx on health/ready,
-# ErrorEnvelope reserved for later features).
+# (no product license yet, local-only server, no 4xx on health/ready).
+# `no-unused-components` stays off so the generic Error response can exist
+# beside the auth-specific error responses.
 extends:
   - recommended
 
