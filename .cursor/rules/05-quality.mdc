@@ -8,6 +8,5 @@ alwaysApply: true
 - **Tests in the same PR** as the behavior. Backend: table-driven tests around the service layer; handler tests for authz and validation. Frontend: tests for the user-visible happy path and the important error/empty states of the page you touched.
 - Cover authorization denials (blocked user, `only_me` post, expired session) — not only the happy path.
 - **Lint + types + tests green** before you push. CI (GitHub Actions, once feature 01 exists) is the merge gate.
-- **Small PRs:** one plan phase, one concern, reviewable in isolation. Do not mix a feed change with an unrelated auth refactor.
+- **Small PRs:** one concern, independently reviewable. Do not mix a feed change with an unrelated auth refactor. If a plan phase has more than one distinct concern, split it into stacked PRs rather than one large phase PR.
 - No skipped tests, no `any`, no empty `catch`, no `//nolint` without a reason on the same line.
-- If a phase is too large for one PR, split the phase in the plan doc first, then implement the smaller phase.

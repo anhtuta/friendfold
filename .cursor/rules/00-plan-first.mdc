@@ -1,5 +1,5 @@
 ---
-description: Plan-first workflow — read the feature doc, implement one phase per PR, update status when it ships
+description: Plan-first workflow — read the feature doc, one concern per PR, update status when a phase ships
 alwaysApply: true
 ---
 
@@ -8,8 +8,8 @@ alwaysApply: true
 Friendfold is built from written plans, not from improvised tickets in chat.
 
 1. Before writing application code, open the matching plan in `docs/features/` (see `docs/features/_TEMPLATE.md`). If the plan does not exist, write it first in a docs PR.
-2. Implement **exactly one phase per pull request**, in listed order. Each phase's acceptance criteria must be met before starting the next.
-3. After a phase is merged, set that phase's status to **Shipped** and link the PR. Update the feature **Status** when the last required phase ships.
+2. Implement phases in listed order. Each phase's acceptance criteria must be met before starting the next. **Each pull request does exactly one concern.** If a phase has more than one distinct concern, split it into stacked PRs (state the merge order in each description) rather than landing one large phase PR. Prefer multiple small PRs over one big PR.
+3. After a phase is fully merged, set that phase's status to **Shipped** and link the PR (or PRs). Update the feature **Status** when the last required phase ships.
 4. Do not start feature N+1 while feature N still has unshipped phases that N+1 depends on (dependencies are listed in each plan).
 5. If implementation disagrees with the plan, change the plan (and add an ADR in `docs/decisions/` when the choice is lasting) instead of quietly diverging.
 

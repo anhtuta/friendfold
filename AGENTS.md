@@ -12,9 +12,10 @@ Do not modify root `README.md` unless the task explicitly says to; other work ma
 
 1. Every feature lives in `docs/features/NN-name.md`, written from `docs/features/_TEMPLATE.md`.
 2. Do not write implementation code for a feature until that plan exists and the phase you are building is specified.
-3. Implement **one phase per pull request**, in the order listed in the plan. Do not skip ahead, combine phases, or start the next feature while the current one's required phases are open.
-4. When a phase ships, update that phase's status in the plan (and the doc's overall **Status** if the feature is fully done). Link the PR.
-5. If you discover the plan is wrong, update the plan in the same PR as the code, or in a docs-only PR before coding further. Record cross-cutting choices as ADRs in `docs/decisions/`.
+3. Implement phases **in the order listed in the plan**. Do not skip ahead, combine phases, or start the next feature while the current one's required phases are open.
+4. **Each pull request does exactly one concern.** Prefer several small, independently reviewable PRs over one large PR. If a phase contains more than one distinct concern (for example Docker Compose services vs. migration tooling vs. config and a ready check), split it into stacked PRs and state the merge order in each description. Tests for the behavior a PR adds ship in that PR.
+5. When a phase ships, update that phase's status in the plan (and the doc's overall **Status** if the feature is fully done). Link the PR, or every PR if the phase was split.
+6. If you discover the plan is wrong, update the plan in the same PR as the code, or in a docs-only PR before coding further. Record cross-cutting choices as ADRs in `docs/decisions/`.
 
 New work starts by reading:
 
@@ -96,7 +97,7 @@ Next number is `0007`. Status is `Proposed`, `Accepted`, `Superseded by NNNN`, o
 
 - Tests ship in the same PR as the change: Go table-driven unit tests around the service layer, HTTP handler tests with a test database or tightly scoped fakes, and frontend tests for user-visible behavior.
 - Lint and typecheck must be green locally; CI on GitHub Actions is the gate.
-- PRs are small and focused — one plan phase, one concern. If a PR is hard to review, split it.
+- PRs are small and focused — **one concern**, independently reviewable. A phase may be multiple PRs; do not combine unrelated concerns. If a PR is hard to review, split it.
 - Do not merge with skipped tests, `as any`, or `//nolint` without a one-line justification.
 
 ## (g) Security
