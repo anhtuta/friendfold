@@ -1,6 +1,6 @@
 # Feature 02: Accounts
 
-**Status:** In progress (phase 1)  
+**Status:** In progress (phase 2)  
 **Owner:** —  
 **Plan version:** 1
 
@@ -143,8 +143,8 @@ CSRF: mutating `/v1/auth/*` that rely on cookies require Origin matching `WEB_OR
 
 | Route or component | Responsibility |
 | --- | --- |
-| `/signup` | Email, password, display name, DOB, terms checkbox, Google button |
-| `/login` | Email, password, Google button, link to forgot |
+| `/signup` | Email, password, display name, DOB, terms checkbox (Google button is phase 4) |
+| `/login` | Email, password, link to sign up (forgot-password is phase 3; Google is phase 4) |
 | `/forgot-password` | Request reset |
 | `/reset-password?token=` | New password |
 | `/verify-email?token=` | Calls verify API, then redirects |
@@ -180,14 +180,14 @@ Unverified banner on the main chrome: "Check your email" with resend.
 
 ### Phase 1 — Email/password register, login, logout, me, sessions
 
-**Status:** In progress  
+**Status:** Shipped  
 **PR:** split into five stacked PRs (one concern each); merge in this order:
 
-1. OpenAPI register / login / logout / me (this PR)
-2. `users` table migration + sqlc
-3. Platform sessions, cookies, Origin check, rate limit
-4. Auth module (argon2id, handlers)
-5. Frontend `/signup`, `/login`, sign-out, `GET /me`
+1. https://github.com/anhtuta/friendfold/pull/19 — OpenAPI register / login / logout / me
+2. https://github.com/anhtuta/friendfold/pull/20 — `users` table migration + sqlc
+3. https://github.com/anhtuta/friendfold/pull/21 — platform sessions, cookies, Origin check, rate limit
+4. https://github.com/anhtuta/friendfold/pull/22 — auth module (argon2id, handlers)
+5. This PR — frontend `/signup`, `/login`, sign-out, `GET /me`
 
 Work:
 
@@ -197,9 +197,9 @@ Work:
 
 Acceptance:
 
-- [ ] Register + login + me + logout round-trip in tests and in the browser.
-- [ ] Password not stored plaintext; cookie HttpOnly.
-- [ ] Unknown vs bad password both 401.
+- [x] Register + login + me + logout round-trip in tests and in the browser.
+- [x] Password not stored plaintext; cookie HttpOnly.
+- [x] Unknown vs bad password both 401.
 
 Decisions / deviations (phase 1):
 
