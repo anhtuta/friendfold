@@ -72,8 +72,9 @@ Accepted ADRs already in the repo:
 - [0004](docs/decisions/0004-modular-monolith.md) — modular monolith
 - [0005](docs/decisions/0005-monorepo-layout.md) — monorepo layout
 - [0006](docs/decisions/0006-snowflake-ids.md) — 64-bit Snowflake IDs
+- [0007](docs/decisions/0007-tailwind-css.md) — Tailwind CSS
 
-Next number is `0007`. Status is `Proposed`, `Accepted`, `Superseded by NNNN`, or `Deprecated`.
+Next number is `0008`. Status is `Proposed`, `Accepted`, `Superseded by NNNN`, or `Deprecated`.
 
 ## (d) API contract first
 

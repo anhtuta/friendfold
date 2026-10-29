@@ -1,6 +1,6 @@
 # Feature 01: Project foundation
 
-**Status:** In progress (phase 2)  
+**Status:** In progress (phase 3)  
 **Owner:** —  
 **Plan version:** 1
 
@@ -22,7 +22,7 @@ Stand up the skeleton every later feature depends on: a compilable Go API, a run
 - Docker Compose: Postgres 16, Redis 7, Mailpit. Documented env vars in `.env.example` (names only).
 - GitHub Actions: Go test + lint, sqlc diff (once queries exist), `next build` / `tsc`, OpenAPI syntax check. Path filters so docs-only PRs skip heavy jobs if easy.
 - `.gitignore` for binaries, `node_modules`, `.env`, Next/Go build artifacts.
-- One CSS/styling choice documented in an ADR **or** in this plan's open questions, then used on the placeholder page.
+- One CSS/styling choice documented in an ADR **or** in this plan's open questions, then used on the placeholder page. **Decision:** Tailwind CSS ([ADR 0007](../decisions/0007-tailwind-css.md)).
 
 ### Out of scope
 
@@ -185,8 +185,8 @@ Decisions / deviations:
 
 ### Phase 3 — Next.js app
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** split into stacked PRs (one concern each); list completed as they merge.
 
 Work:
 
@@ -226,7 +226,7 @@ Acceptance:
 
 ## Open questions
 
-- **CSS approach:** Tailwind vs CSS modules. Default if we must proceed: **Tailwind** (common with Next.js, easy for agents). Confirm in phase 3 and ADR 0007 if we want it recorded.
+- **CSS approach:** Confirmed **Tailwind CSS** in phase 3 ([ADR 0007](../decisions/0007-tailwind-css.md)). CSS modules and CSS-in-JS are out unless a later ADR supersedes this.
 - **golangci-lint vs a smaller set:** Default: golangci-lint with a committed `.golangci.yml` in phase 4.
 - **API proxy:** Browser calls `localhost:8080` directly in dev (CORS) vs Next.js rewrite. Default: **CORS + direct**, simpler; a rewrite can be added if cookie SameSite becomes an issue (it should not on http://localhost).
 - **i18n library now vs later:** Default: English strings in phase 3; add `next-intl` when Vietnamese is scheduled, not in 01.
