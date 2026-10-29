@@ -8,15 +8,19 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
+	"github.com/anhtuta/friendfold/backend/internal/auth"
 	"github.com/anhtuta/friendfold/backend/internal/platform/config"
 	"github.com/anhtuta/friendfold/backend/internal/platform/db"
 	httpx "github.com/anhtuta/friendfold/backend/internal/platform/http"
 	"github.com/anhtuta/friendfold/backend/internal/platform/id"
 	platformlog "github.com/anhtuta/friendfold/backend/internal/platform/log"
+	"github.com/anhtuta/friendfold/backend/internal/platform/ratelimit"
 	redisx "github.com/anhtuta/friendfold/backend/internal/platform/redis"
+	"github.com/anhtuta/friendfold/backend/internal/platform/session"
 )
 
 func main() {
@@ -32,10 +36,15 @@ func run() int {
 
 	logger := platformlog.New(cfg.LogLevel)
 
-	// Construct at boot so a bad worker ID fails before we accept traffic.
-	// IDs are not served over HTTP until later features need them.
-	if _, err := id.NewGenerator(cfg.SnowflakeWorkerID); err != nil {
+	gen, err := id.NewGenerator(cfg.SnowflakeWorkerID)
+	if err != nil {
 		logger.Error("snowflake generator", slog.String("error", err.Error()))
+		return 1
+	}
+
+	hasher, err := auth.NewHasher(runtime.GOMAXPROCS(0))
+	if err != nil {
+		logger.Error("password hasher", slog.String("error", err.Error()))
 		return 1
 	}
 
@@ -57,13 +66,27 @@ func run() int {
 		}
 	}()
 
+	mux := httpx.NewRouter(cfg, logger, httpx.ReadyDeps{
+		Write: pools.Write,
+		Read:  pools.Read,
+		Redis: rdb,
+	})
+	auth.NewHandler(
+		auth.NewService(
+			auth.NewStore(pools.Write),
+			session.NewStore(rdb.Cmdable()),
+			hasher,
+			gen,
+			ratelimit.New(rdb.Cmdable()),
+			logger,
+		),
+		cfg.CookieSecure,
+		cfg.WebOrigin,
+	).Mount(mux)
+
 	srv := &http.Server{
-		Addr: cfg.APIAddr,
-		Handler: httpx.NewRouter(cfg, logger, httpx.ReadyDeps{
-			Write: pools.Write,
-			Read:  pools.Read,
-			Redis: rdb,
-		}),
+		Addr:              cfg.APIAddr,
+		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

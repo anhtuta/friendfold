@@ -210,6 +210,7 @@ Decisions / deviations (phase 1):
 - **`COOKIE_SECURE`:** explicit `true`/`false` overrides. When unset, `Secure` follows `WEB_ORIGIN` (`https` → true, `http` → false) so local `go run` works without a `.env`.
 - **Client IP** for rate limits is `RemoteAddr` only. `X-Forwarded-For` is not trusted until a reverse-proxy config exists.
 - Rate limiter is a Redis sliding window in `internal/platform/ratelimit` (ZSET + Lua). Auth keys: `rate:auth:{action}:{ip}` and `rate:auth:{action}:{emailHash}`. Limits (phase 1): register 5/15min per IP and 3/15min per email hash; login 10/15min per IP and per email hash.
+- argon2id PHC encoding `$argon2id$v=19$m=19456,t=2,p=1$…` (19 MiB, time 2, parallelism 1). Hashing runs on a bounded worker pool sized to `GOMAXPROCS`. Rate-limit Redis errors are logged and **fail open**; session Redis errors fail the request. Go request/response structs match the OpenAPI field names (codegen still deferred; health/ready `const` schemas were a poor fit for oapi-codegen in foundation).
 
 ### Phase 2 — Email verification
 

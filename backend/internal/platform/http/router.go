@@ -3,7 +3,6 @@ package httpx
 
 import (
 	"log/slog"
-	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -11,8 +10,9 @@ import (
 	"github.com/anhtuta/friendfold/backend/internal/platform/config"
 )
 
-// NewRouter builds the chi mux for the API process.
-func NewRouter(cfg config.Config, logger *slog.Logger, ready ReadyDeps) http.Handler {
+// NewRouter builds the chi mux for the API process. Feature modules mount
+// additional routes on the returned mux in cmd/api.
+func NewRouter(cfg config.Config, logger *slog.Logger, ready ReadyDeps) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(RequestID)
