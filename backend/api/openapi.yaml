@@ -4,14 +4,33 @@ info:
   version: 0.1.0
   description: |
     HTTP API for Friendfold. All paths are versioned under `/v1`.
-    Resource IDs are Snowflake 64-bit integers serialized as decimal strings.
+    Resource IDs are Snowflake 64-bit integers serialized as decimal strings
+    (JavaScript cannot safely hold them as numbers). JSON field names are camelCase.
+
+    Application errors use the envelope
+    `{ "error": { "code": "...", "message": "...", "details": {} } }`.
+    The public ready probe is the exception: a failed dependency ping returns
+    `{"status":"unavailable"}` with no dependency names or URLs.
+
+    These platform probes are public (`security: []`). Later user operations
+    authenticate with `cookieAuth` (cookie `friendfold_session`, feature 02).
+    The scheme is declared here so the name stays stable.
+
+    Every response includes `X-Request-Id` (echoed from the client when valid,
+    otherwise generated).
 servers:
   - url: http://localhost:8080
-    description: Local development
+    description: Local development (`API_ADDR`, default `:8080`)
+tags:
+  - name: platform
+    description: Process liveness and dependency readiness. No product data.
+security: []
 paths:
   /v1/health:
     get:
       operationId: getHealth
+      tags:
+        - platform
       summary: Process liveness
       description: |
         Returns 200 when the API process is up. Does not check Postgres or Redis.
@@ -21,52 +40,86 @@ paths:
           description: Process is alive
           headers:
             X-Request-Id:
-              description: Echoed or generated request correlation id
-              schema:
-                type: string
+              $ref: "#/components/headers/RequestId"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
-              example:
-                status: ok
+              examples:
+                ok:
+                  value:
+                    status: ok
   /v1/ready:
     get:
       operationId: getReady
+      tags:
+        - platform
       summary: Postgres and Redis reachability
       description: |
         Returns 200 when the write Postgres pool, read Postgres pool, and Redis
         all ping. Returns 503 otherwise. Does not check process-only liveness
         details and does not report which dependency failed (public probe).
+        Application errors still use `ErrorEnvelope`; this probe does not.
       security: []
       responses:
         "200":
           description: Postgres and Redis are reachable
           headers:
             X-Request-Id:
-              description: Echoed or generated request correlation id
-              schema:
-                type: string
+              $ref: "#/components/headers/RequestId"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
-              example:
-                status: ok
+              examples:
+                ok:
+                  value:
+                    status: ok
         "503":
           description: A dependency ping failed
           headers:
             X-Request-Id:
-              description: Echoed or generated request correlation id
-              schema:
-                type: string
+              $ref: "#/components/headers/RequestId"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/UnavailableResponse"
-              example:
-                status: unavailable
+              examples:
+                unavailable:
+                  value:
+                    status: unavailable
 components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: friendfold_session
+      description: |
+        Opaque session id. Flags (feature 02): HttpOnly; Secure; SameSite=Lax;
+        Path=/. Declared now; first used when accounts land.
+  headers:
+    RequestId:
+      description: Echoed or generated request correlation id
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+  responses:
+    Error:
+      description: Application error using the shared envelope
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            notFound:
+              value:
+                error:
+                  code: not_found
+                  message: Resource not found
   schemas:
     HealthResponse:
       type: object
@@ -95,8 +148,10 @@ components:
       properties:
         code:
           type: string
+          minLength: 1
         message:
           type: string
+          minLength: 1
         details:
           type: object
           additionalProperties: true
@@ -108,3 +163,7 @@ components:
       properties:
         error:
           $ref: "#/components/schemas/Error"
+      examples:
+        - error:
+            code: not_found
+            message: Resource not found
