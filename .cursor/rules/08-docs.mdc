@@ -1,0 +1,16 @@
+---
+description: Keep feature plans, ADRs, and the overview in sync with shipped behavior
+globs: docs/**/*.md,backend/api/**,AGENTS.md,.cursor/rules/**
+alwaysApply: false
+---
+
+# Keep docs current
+
+Docs are part of the product. A behavior change without a doc change is incomplete.
+
+- Update the feature plan's data model, API list, and phase status in the **same PR** as the code.
+- Update `backend/api/openapi.yaml` in the same PR as the endpoint (contract first: spec lands at the start of the PR, not as a leftover).
+- Lasting decisions go to `docs/decisions/`; do not only mention them in the PR body.
+- `docs/README.md` is the index — add a row when you add a doc.
+- Do not edit root `README.md` unless the task explicitly asks; another change may already own it.
+- Write concrete docs (tables, paths, column names). Do not add filler sections.

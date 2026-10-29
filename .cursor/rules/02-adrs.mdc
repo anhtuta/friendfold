@@ -1,0 +1,16 @@
+---
+description: Record lasting technical choices as Architecture Decision Records in docs/decisions/
+alwaysApply: false
+---
+
+# Architecture Decision Records
+
+When a choice is expensive to reverse (language, datastore, ID format, module split, feed fan-out, auth scheme, cloud region), add `docs/decisions/NNNN-kebab-title.md`.
+
+- Next number after the highest existing `NNNN`.
+- Status: `Proposed` | `Accepted` | `Superseded by NNNN` | `Deprecated`.
+- Required sections: Status, Date, Context, Decision, Consequences, Alternatives considered.
+- Link the ADR from the feature plan that depends on it.
+- Do not ADR a local rename or a library bump. Do not bury a new decision only in chat or a PR description.
+
+Seeded ADRs: 0001 Go, 0002 Next.js, 0003 Postgres+Redis, 0004 modular monolith, 0005 monorepo, 0006 Snowflake IDs.

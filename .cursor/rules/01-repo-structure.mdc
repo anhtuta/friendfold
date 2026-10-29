@@ -1,0 +1,36 @@
+---
+description: Monorepo layout — frontend/, backend/internal/<feature>, docs/ — and module boundaries
+alwaysApply: true
+---
+
+# Repo structure
+
+Monorepo with three trees (create `frontend/` and `backend/` only when implementing [feature 01](docs/features/01-project-foundation.md)):
+
+```
+frontend/                     # Next.js App Router, React, TypeScript — web only
+backend/
+  cmd/api/                    # main HTTP process
+  internal/<feature>/         # one Go module per product feature
+  internal/platform/          # shared kernel (config, pgx pool, Redis, chi middleware, Snowflake IDs, log)
+  api/openapi.yaml
+  db/migrations/              # goose
+  db/queries/                 # sqlc
+docs/
+```
+
+Feature → module:
+
+- 02 accounts → `internal/auth`
+- 03 profiles → `internal/profile`
+- 04 friends → `internal/friend`
+- 05 posts → `internal/post`
+- 06 news feed → `internal/feed`
+- 07 likes → `internal/reaction`
+- 07 comments → `internal/comment`
+- 08 notifications → `internal/notification`
+- 09 safety → `internal/safety`
+
+A module owns its handlers, service, sqlc queries, and tests. Import `internal/platform` freely. Cross-feature calls go through small interfaces owned by the **caller**, implemented by the callee in `cmd/api` wiring. Do not `SELECT` from another module's tables. Later, a module can move to its own process and the interface becomes gRPC.
+
+Do not add a mobile app, a second frontend framework, or extra top-level roots (`services/`, `apps/`, `packages/`) without an ADR. Layout rationale is [ADR 0005](docs/decisions/0005-monorepo-layout.md); module boundaries are [ADR 0004](docs/decisions/0004-modular-monolith.md).

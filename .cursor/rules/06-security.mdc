@@ -1,0 +1,15 @@
+---
+description: No secrets in git, validate input, authorize every endpoint, hash passwords with argon2id
+alwaysApply: true
+---
+
+# Security
+
+- **Secrets:** never commit credentials, cookies, API keys, or private keys. Read them from the environment. `.env.example` documents names, not values.
+- **Validation:** every request field has a max length and a type. Reject unknown JSON fields on write endpoints. Cap `limit` (default 20, max 50). Sanitize or store rich text as plain text until a documented markdown policy exists (MVP posts and comments are plain text).
+- **Authorization:** every endpoint declares who may call it. Resource checks happen in the service layer (owner, friend, not blocked, admin). Missing authz is a bug, not a follow-up. For hidden resources return **404**, not 403, so privacy settings do not leak existence.
+- **Passwords:** argon2id only (memory-hard parameters documented in the auth module). Never log passwords, tokens, or session IDs. Google-only accounts have a NULL password hash.
+- **Sessions:** server-side in Redis; opaque session ID in an `HttpOnly; Secure; SameSite=Lax` cookie. Rotate on login and on password change. Revoke on logout and on password reset.
+- **Uploads:** allowlist image MIME types, cap size, transcode/strip metadata before serving, store in object storage (local disk or MinIO in dev). No user-controlled file served from the API process.
+- **Injection:** parameterized SQL via sqlc/pgx only. No string-built queries.
+- Treat user content as untrusted in the UI (React's default escaping; never `dangerouslySetInnerHTML` for post bodies).
