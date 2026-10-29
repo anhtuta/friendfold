@@ -147,3 +147,38 @@ func TestCORSDeniesOtherOrigin(t *testing.T) {
 		t.Fatalf("status = %d, want 200 (request still served)", rec.Code)
 	}
 }
+
+func TestCORSAllowsCredentialsAndPOST(t *testing.T) {
+	t.Parallel()
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodOptions, "/v1/auth/login", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	testRouter(nil).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Errorf("Allow-Credentials = %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, "POST") {
+		t.Errorf("Allow-Methods = %q, want POST", got)
+	}
+}
+
+func TestAccessLogIncludesUserIDWhenSet(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	h := AccessLog(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		SetLogUserID(r.Context(), 42)
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/v1/auth/me", nil)
+	req.Header.Set("X-Request-Id", "uid-log")
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	line := buf.String()
+	if !strings.Contains(line, `"user_id":42`) {
+		t.Fatalf("log missing user_id: %s", line)
+	}
+}
