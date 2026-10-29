@@ -1,0 +1,16 @@
+# OpenAPI 3.1 lint for backend/api/openapi.yaml.
+# recommended is the default ruleset; the offs match foundation probes
+# (no product license yet, local-only server, no 4xx on health/ready,
+# ErrorEnvelope reserved for later features).
+extends:
+  - recommended
+
+apis:
+  friendfold@v1:
+    root: backend/api/openapi.yaml
+
+rules:
+  info-license: off
+  no-server-example.com: off
+  operation-4xx-response: off
+  no-unused-components: off
