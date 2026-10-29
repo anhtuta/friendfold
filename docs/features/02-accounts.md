@@ -187,7 +187,7 @@ Unverified banner on the main chrome: "Check your email" with resend.
 2. https://github.com/anhtuta/friendfold/pull/20 — `users` table migration + sqlc
 3. https://github.com/anhtuta/friendfold/pull/21 — platform sessions, cookies, Origin check, rate limit
 4. https://github.com/anhtuta/friendfold/pull/22 — auth module (argon2id, handlers)
-5. This PR — frontend `/signup`, `/login`, sign-out, `GET /me`
+5. https://github.com/anhtuta/friendfold/pull/23 — frontend `/signup`, `/login`, sign-out, `GET /me`
 
 Work:
 
