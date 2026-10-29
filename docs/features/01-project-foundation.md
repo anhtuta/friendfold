@@ -100,7 +100,7 @@ CORS: allow the Next.js origin from env (`WEB_ORIGIN`). Other origins denied.
 ### Phase 1 — Go API skeleton
 
 **Status:** Shipped  
-**PR:** —
+**PR:** https://github.com/anhtuta/friendfold/pull/3
 
 Work:
 
