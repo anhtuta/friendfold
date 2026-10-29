@@ -1,6 +1,6 @@
 # Feature 01: Project foundation
 
-**Status:** In progress (phase 1)  
+**Status:** In progress (phase 2)  
 **Owner:** —  
 **Plan version:** 1
 
@@ -87,7 +87,7 @@ CORS: allow the Next.js origin from env (`WEB_ORIGIN`). Other origins denied.
 ## Security and privacy
 
 - No auth yet; health is public and must not return versions of libraries, env dumps, or connection strings.
-- `.env` is gitignored; `.env.example` lists `DATABASE_URL`, `DATABASE_READ_URL`, `REDIS_URL`, `API_ADDR`, `WEB_ORIGIN`, `SNOWFLAKE_WORKER_ID`, `LOG_LEVEL`.
+- `.env` is gitignored; `.env.example` lists `DATABASE_URL`, `DATABASE_READ_URL`, `REDIS_URL`, `API_ADDR`, `WEB_ORIGIN`, `SNOWFLAKE_WORKER_ID`, `LOG_LEVEL`, `PGX_MAX_CONNS`.
 - Default Compose Postgres password is for **local only** and documented as such.
 
 ## Dependencies on other features
@@ -135,8 +135,12 @@ Decisions made while implementing (plan was slightly underspecified):
 
 ### Phase 2 — Compose, Postgres, Redis, goose, ready check
 
-**Status:** Not started  
-**PR:** —
+**Status:** Shipped  
+**PR:** split into three stacked PRs (one concern each):
+
+1. https://github.com/anhtuta/friendfold/pull/5 — Compose (Postgres 16, Redis 7, Mailpit), `.env.example`, `.gitignore`
+2. https://github.com/anhtuta/friendfold/pull/6 — goose bootstrap migration + sqlc config
+3. https://github.com/anhtuta/friendfold/pull/7 — pgx/Redis pools + `GET /v1/ready`
 
 Work:
 
@@ -148,9 +152,36 @@ Work:
 
 Acceptance:
 
-- [ ] `docker compose up -d` then ready returns 200.
-- [ ] Stopping Postgres makes ready return 503; API process stays up.
-- [ ] goose up/down works against Compose.
+- [x] `docker compose up -d` then ready returns 200.
+- [x] Stopping Postgres makes ready return 503; API process stays up.
+- [x] goose up/down works against Compose.
+
+Local run (through phase 2; Next.js is phase 3):
+
+```bash
+docker compose up -d
+cd backend
+go run github.com/pressly/goose/v3/cmd/goose@v3.24.3 -dir db/migrations postgres \
+  "postgres://friendfold:friendfold@127.0.0.1:5432/friendfold?sslmode=disable" up
+CGO_ENABLED=0 go test ./...
+CGO_ENABLED=0 go build -o /tmp/friendfold-api ./cmd/api
+API_ADDR=:8080 go run ./cmd/api
+# GET http://localhost:8080/v1/health  →  {"status":"ok"}
+# GET http://localhost:8080/v1/ready   →  {"status":"ok"} when Compose is up
+# mailpit UI: http://localhost:8025
+```
+
+`DATABASE_URL`, `DATABASE_READ_URL`, and `REDIS_URL` default to the local Compose endpoints so `go run ./cmd/api` works without a filled `.env`. Copy `.env.example` to `.env` when you need to override them. The Compose Postgres password is local-only.
+
+Decisions / deviations:
+
+- Phase 2 is three PRs, not one, matching the one-concern-per-PR rule.
+- Goose's version table is `goose_db_version` (tool default), not `schema_migrations`.
+- `DATABASE_READ_URL` falls back to `DATABASE_URL` when unset. `PGX_MAX_CONNS` is configurable (default 10, range 1–100) and listed in `.env.example`.
+- Ready 503 body is `{"status":"unavailable"}` with no dependency names or URLs (those go in logs with `request_id`). Ping timeout is 2s.
+- sqlc Go for `SELECT 1` is generated under `internal/platform/db/sqlc` (pgx/v5). Ready uses pool/client `Ping`, not that query.
+- goose v3.24.3 and sqlc v1.29.0 are run via `go run github.com/...@version` (they want Go ≥ 1.23; the Go 1.22 module toolchain auto-selects a newer compiler for those tools only).
+- Redis helper lives in `internal/platform/redis` with package name `redisx` so it can wrap `github.com/redis/go-redis/v9`.
 
 ### Phase 3 — Next.js app
 
@@ -202,11 +233,4 @@ Acceptance:
 
 ## Local run
 
-Filled in when phase 4 ships. Expected shape:
-
-```bash
-docker compose up -d
-# backend: go run ./cmd/api
-# frontend: npm run dev
-# mailpit UI: http://localhost:8025
-```
+Commands through phase 2 are in that phase's section above. Frontend (`npm run dev`) and a single copy-paste block for the whole stack wait for phases 3–4.

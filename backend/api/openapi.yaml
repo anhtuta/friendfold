@@ -30,6 +30,42 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
               example:
                 status: ok
+  /v1/ready:
+    get:
+      operationId: getReady
+      summary: Postgres and Redis reachability
+      description: |
+        Returns 200 when the write Postgres pool, read Postgres pool, and Redis
+        all ping. Returns 503 otherwise. Does not check process-only liveness
+        details and does not report which dependency failed (public probe).
+      security: []
+      responses:
+        "200":
+          description: Postgres and Redis are reachable
+          headers:
+            X-Request-Id:
+              description: Echoed or generated request correlation id
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+        "503":
+          description: A dependency ping failed
+          headers:
+            X-Request-Id:
+              description: Echoed or generated request correlation id
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnavailableResponse"
+              example:
+                status: unavailable
 components:
   schemas:
     HealthResponse:
@@ -41,6 +77,15 @@ components:
         status:
           type: string
           const: ok
+    UnavailableResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          const: unavailable
     Error:
       type: object
       additionalProperties: false
