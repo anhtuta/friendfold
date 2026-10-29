@@ -1,6 +1,6 @@
 # Feature 01: Project foundation
 
-**Status:** In progress (phase 3)  
+**Status:** Shipped  
 **Owner:** —  
 **Plan version:** 1
 
@@ -236,8 +236,14 @@ Decisions / deviations:
 
 ### Phase 4 — OpenAPI completion and CI
 
-**Status:** Not started  
-**PR:** —
+**Status:** Shipped  
+**PR:** split into five stacked PRs (one concern each); merge in this order:
+
+1. https://github.com/anhtuta/friendfold/pull/16 — backend GitHub Actions (`go test` / `go build`, golangci-lint, sqlc diff)
+2. https://github.com/anhtuta/friendfold/pull/14 — frontend GitHub Actions (`tsc`, Vitest, ESLint, `next build`)
+3. https://github.com/anhtuta/friendfold/pull/17 — OpenAPI lint in GitHub Actions (Redocly)
+4. https://github.com/anhtuta/friendfold/pull/15 — complete `backend/api/openapi.yaml` (health, ready, error envelope)
+5. https://github.com/anhtuta/friendfold/pull/18 — this PR (Local run + mark feature shipped)
 
 Work:
 
@@ -247,24 +253,70 @@ Work:
 
 Acceptance:
 
-- [ ] CI green on the PR.
-- [ ] Spec validates.
-- [ ] This plan's Status becomes **Shipped** when this phase merges; add Local run commands.
+- [x] CI green on the PR.
+- [x] Spec validates.
+- [x] This plan's Status becomes **Shipped** when this phase merges; add Local run commands.
+
+Local run (whole stack, including CI checks): see **Local run** at the bottom of this file.
+
+Decisions / deviations:
+
+- Phase 4 is five PRs, not one, matching the one-concern-per-PR rule.
+- golangci-lint **v2.4.0** with committed `backend/.golangci.yml` (standard set plus `errorlint` and `contextcheck`; gofmt/goimports as formatters). CI uses Go **1.24.x** even though `go.mod` is 1.22, because sqlc 1.29.0 and golangci-lint v2 need a newer compiler.
+- OpenAPI lint is **Redocly CLI 1.34.5**, not Spectral (better OpenAPI 3.1 support). `redocly.yaml` turns off `info-license`, `no-server-example.com`, `operation-4xx-response`, and `no-unused-components`: there is no product license yet, the only server is localhost, health/ready have no 4xx, and `ErrorEnvelope` / `cookieAuth` are declared for later features.
+- `cookieAuth` is the `friendfold_session` cookie from [02](02-accounts.md). Ready 503 stays `{"status":"unavailable"}`, not the error envelope.
+- Frontend CI also runs Vitest and ESLint (scripts from phase 3). `npm run typecheck` is `next typegen && tsc --noEmit` so App Router types exist on a clean checkout.
+- Path filters were omitted. GitHub required checks stay pending when a path-filtered workflow never runs; these jobs are short enough to run on every PR, including docs-only.
+- Generated OpenAPI client/server stubs are **not** in this phase. Health/ready bodies are tiny literals that already match the spec; codegen waits until a product endpoint needs shared models. AGENTS.md still requires generating types before those endpoints.
+- No Git LFS checkout in CI: no job reads binary assets. PR 13 owns LFS tracking; this phase does not duplicate it.
+- Root `README.md` was not edited.
 
 ## Testing plan
 
 - Unit: Snowflake generator (unique, worker bits).
 - Handler: health 200; ready 200/503 with fake ping or testcontainers/Compose.
-- CI job exists and is required.
+- CI jobs exist on pull requests and on `main`: backend (`test`, `lint`, `sqlc`), frontend (`typecheck-test-build`), OpenAPI (`lint`). Mark them required in branch protection when that is configured.
 - Frontend (phase 3): Vitest + Testing Library for `/` (name, tagline, sign-in is not a link) and `/health` (`OK` / not ready / unreachable). Build + `tsc --noEmit` still required.
 
 ## Open questions
 
 - **CSS approach:** Confirmed **Tailwind CSS** in phase 3 ([ADR 0007](../decisions/0007-tailwind-css.md)). CSS modules and CSS-in-JS are out unless a later ADR supersedes this.
-- **golangci-lint vs a smaller set:** Default: golangci-lint with a committed `.golangci.yml` in phase 4.
+- **golangci-lint vs a smaller set:** Confirmed **golangci-lint** v2 with committed `backend/.golangci.yml` in phase 4.
 - **API proxy:** Confirmed **CORS + direct** for browser calls later (`WEB_ORIGIN`). The phase 3 `/health` page uses a server-side fetch with `API_BASE_URL` because it is a Server Component; no Next.js rewrite. A rewrite can be added if cookie SameSite becomes an issue (it should not on http://localhost).
 - **i18n library now vs later:** Confirmed English strings in `frontend/lib/copy.ts` in phase 3; add `next-intl` when Vietnamese is scheduled, not in 01.
 
 ## Local run
 
-Commands through phase 3 are in that phase's section above. A single copy-paste block for the whole stack, including CI, waits for phase 4.
+Copy `.env.example` to `.env` only when you need to override defaults. Compose Postgres password is local-only.
+
+```bash
+docker compose up -d
+
+cd backend
+go run github.com/pressly/goose/v3/cmd/goose@v3.24.3 -dir db/migrations postgres \
+  "postgres://friendfold:friendfold@127.0.0.1:5432/friendfold?sslmode=disable" up
+CGO_ENABLED=0 go test ./...
+golangci-lint run --config .golangci.yml ./...
+GOTOOLCHAIN=auto go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 diff
+CGO_ENABLED=0 go build -o /tmp/friendfold-api ./cmd/api
+API_ADDR=:8080 go run ./cmd/api
+# GET http://localhost:8080/v1/health  →  {"status":"ok"}
+# GET http://localhost:8080/v1/ready   →  {"status":"ok"} when Compose is up
+# mailpit UI: http://localhost:8025
+
+# other terminal:
+cd frontend
+npm install
+npm run typecheck
+npm test
+npm run lint
+npm run build
+npm run dev
+# http://localhost:3000       → Friendfold / Into the fold of friends.
+# http://localhost:3000/health → OK when the API ready check succeeds
+
+# from repo root:
+npx --yes @redocly/cli@1.34.5 lint --config redocly.yaml
+```
+
+`WEB_ORIGIN` (API CORS allowlist) defaults to `http://localhost:3000`. `API_BASE_URL` (Next.js server → Go API) defaults to `http://localhost:8080`. `PORT` is Next.js's usual process env (default `3000`). `DATABASE_URL`, `DATABASE_READ_URL`, and `REDIS_URL` default to the local Compose endpoints.
