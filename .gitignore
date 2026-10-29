@@ -1,0 +1,18 @@
+# Secrets
+.env
+.env.local
+
+# Go
+bin/
+*.exe
+*.test
+coverage.out
+coverage.html
+
+# Node / Next.js (frontend lands in a later phase)
+node_modules/
+.next/
+out/
+
+# OS
+.DS_Store
