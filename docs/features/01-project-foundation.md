@@ -87,7 +87,7 @@ CORS: allow the Next.js origin from env (`WEB_ORIGIN`). Other origins denied.
 ## Security and privacy
 
 - No auth yet; health is public and must not return versions of libraries, env dumps, or connection strings.
-- `.env` is gitignored; `.env.example` lists `DATABASE_URL`, `DATABASE_READ_URL`, `REDIS_URL`, `API_ADDR`, `WEB_ORIGIN`, `SNOWFLAKE_WORKER_ID`, `LOG_LEVEL`, `PGX_MAX_CONNS`.
+- `.env` is gitignored; `.env.example` lists `DATABASE_URL`, `DATABASE_READ_URL`, `REDIS_URL`, `API_ADDR`, `WEB_ORIGIN`, `API_BASE_URL`, `SNOWFLAKE_WORKER_ID`, `LOG_LEVEL`, `PGX_MAX_CONNS`.
 - Default Compose Postgres password is for **local only** and documented as such.
 
 ## Dependencies on other features
@@ -185,8 +185,13 @@ Decisions / deviations:
 
 ### Phase 3 — Next.js app
 
-**Status:** In progress  
-**PR:** split into stacked PRs (one concern each); list completed as they merge.
+**Status:** Shipped  
+**PR:** split into four stacked PRs (one concern each); merge in this order:
+
+1. Tailwind CSS ADR (docs)
+2. Next.js App Router scaffold
+3. Home page (`/` name + tagline)
+4. `/health` page + `API_BASE_URL` (this PR)
 
 Work:
 
@@ -194,13 +199,40 @@ Work:
 - Document `WEB_ORIGIN` and `NEXT_PUBLIC_API_BASE_URL` (or server-only `API_BASE_URL`).
 - Pick and document the styling approach in this phase's PR description and in this doc (update this file).
 
-Scaffold: Next.js 16 App Router in `frontend/`, `strict` TypeScript, Tailwind v4 ([ADR 0007](../decisions/0007-tailwind-css.md)), root layout `lang="en"` + Inter as the placeholder font. `/` renders the product name, tagline, and plain-text “Sign in” (no link until feature 02). `/health` follows in the next PR. English copy lives in `frontend/lib/copy.ts` so later i18n does not scrape TSX.
-
 Acceptance:
 
-- [ ] `npx tsc --noEmit` and production build succeed.
-- [ ] `/` renders the name and tagline.
-- [ ] `/health` shows OK when the API is ready.
+- [x] `npx tsc --noEmit` and production build succeed.
+- [x] `/` renders the name and tagline.
+- [x] `/health` shows OK when the API is ready.
+
+Local run (through phase 3; CI is phase 4):
+
+```bash
+docker compose up -d
+cd backend
+go run github.com/pressly/goose/v3/cmd/goose@v3.24.3 -dir db/migrations postgres \
+  "postgres://friendfold:friendfold@127.0.0.1:5432/friendfold?sslmode=disable" up
+API_ADDR=:8080 go run ./cmd/api
+# other terminal:
+cd frontend
+npm install
+npm run dev
+# http://localhost:3000       → Friendfold / Into the fold of friends.
+# http://localhost:3000/health → OK when the API ready check succeeds
+```
+
+`WEB_ORIGIN` (API CORS allowlist) defaults to `http://localhost:3000`. `API_BASE_URL` (Next.js server → Go API) defaults to `http://localhost:8080`. Set either in `.env` / `frontend/.env.local` only to override. `PORT` is Next.js's usual process env (default `3000`).
+
+Decisions / deviations:
+
+- Phase 3 is four PRs, not one, matching the one-concern-per-PR rule.
+- Styling is Tailwind CSS v4 ([ADR 0007](../decisions/0007-tailwind-css.md)).
+- Next.js **16.4** (current `create-next-app`) with App Router. The empty template turns on Cache Components; we left it **off** so placeholder routes do not need `"use cache"` / extra Suspense.
+- Root layout uses Inter (`next/font/google`) as the placeholder font. `app/layout.tsx` and `app/**/page.tsx` use Next's required default export; other modules use named exports.
+- English copy lives in `frontend/lib/copy.ts`. `next-intl` waits until Vietnamese is scheduled.
+- `/health` is a Server Component that calls `GET {API_BASE_URL}/v1/ready` (server-only `API_BASE_URL`, not `NEXT_PUBLIC_API_BASE_URL`). Browser CORS + direct API calls remain the default for later client components (`WEB_ORIGIN`).
+- Labels: ready 200 → `OK`; 503 → `API is not ready`; network/other → `API unreachable`. No connection strings in the page.
+- Vitest + Testing Library cover the home page and the three `/health` states even though the original testing plan allowed build-only.
 
 ### Phase 4 — OpenAPI completion and CI
 
@@ -224,15 +256,15 @@ Acceptance:
 - Unit: Snowflake generator (unique, worker bits).
 - Handler: health 200; ready 200/503 with fake ping or testcontainers/Compose.
 - CI job exists and is required.
-- No frontend component tests required beyond build; `/health` can be a smoke test later.
+- Frontend (phase 3): Vitest + Testing Library for `/` (name, tagline, sign-in is not a link) and `/health` (`OK` / not ready / unreachable). Build + `tsc --noEmit` still required.
 
 ## Open questions
 
 - **CSS approach:** Confirmed **Tailwind CSS** in phase 3 ([ADR 0007](../decisions/0007-tailwind-css.md)). CSS modules and CSS-in-JS are out unless a later ADR supersedes this.
 - **golangci-lint vs a smaller set:** Default: golangci-lint with a committed `.golangci.yml` in phase 4.
-- **API proxy:** Browser calls `localhost:8080` directly in dev (CORS) vs Next.js rewrite. Default: **CORS + direct**, simpler; a rewrite can be added if cookie SameSite becomes an issue (it should not on http://localhost).
-- **i18n library now vs later:** Default: English strings in phase 3; add `next-intl` when Vietnamese is scheduled, not in 01.
+- **API proxy:** Confirmed **CORS + direct** for browser calls later (`WEB_ORIGIN`). The phase 3 `/health` page uses a server-side fetch with `API_BASE_URL` because it is a Server Component; no Next.js rewrite. A rewrite can be added if cookie SameSite becomes an issue (it should not on http://localhost).
+- **i18n library now vs later:** Confirmed English strings in `frontend/lib/copy.ts` in phase 3; add `next-intl` when Vietnamese is scheduled, not in 01.
 
 ## Local run
 
-Commands through phase 2 are in that phase's section above. Frontend (`npm run dev`) and a single copy-paste block for the whole stack wait for phases 3–4.
+Commands through phase 3 are in that phase's section above. A single copy-paste block for the whole stack, including CI, waits for phase 4.
