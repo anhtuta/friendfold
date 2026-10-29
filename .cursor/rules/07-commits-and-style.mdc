@@ -1,0 +1,36 @@
+---
+description: Conventional Commits plus Go and TypeScript style conventions
+alwaysApply: true
+---
+
+# Commits and style
+
+## Conventional Commits
+
+```
+type(scope): imperative summary
+```
+
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`.
+
+Scopes: `auth`, `profile`, `friend`, `post`, `feed`, `reaction`, `comment`, `notification`, `safety`, `platform`, `web`, `docs`, `ci`.
+
+Examples: `feat(auth): verify email with one-time token`, `docs(feed): mark phase 2 shipped`.
+
+Do not put multiple unrelated types in one commit. PR titles match the primary commit type.
+
+## Go
+
+- `gofmt` / `goimports`; `golangci-lint` once it is in CI.
+- `context.Context` is the first parameter. Honor cancelation.
+- Wrap errors with `fmt.Errorf("verb: %w", err)`. Return sentinel errors (`ErrNotFound`, `ErrForbidden`) from services; map them to HTTP in the handler.
+- Package names are short and singular (`friend`, not `friends`).
+- No `init()` that dials the network. Constructors take dependencies explicitly.
+- Structured logs only (`slog` or equivalent) with `request_id` and `user_id` fields. Never `fmt.Println` in module code.
+
+## TypeScript / React
+
+- `strict: true`. No `any`. No non-null assertions except at a documented boundary (generated OpenAPI types).
+- Next.js App Router. Server Components by default. `"use client"` only for interactivity (forms, infinite scroll, websockets).
+- Named exports. File name matches the exported component or function.
+- Colocate a component with its tests and styles. Shared UI lives under `frontend/` in a `components/` tree once foundation exists — do not invent a second design system.

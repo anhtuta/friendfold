@@ -1,0 +1,19 @@
+---
+description: Next.js + React + TypeScript conventions for the Friendfold web app
+globs: frontend/**/*.ts,frontend/**/*.tsx,frontend/**/*.css
+alwaysApply: false
+---
+
+# TypeScript (frontend)
+
+Stack: Next.js App Router, React, TypeScript. No mobile app ([ADR 0002](docs/decisions/0002-nextjs-frontend.md)).
+
+- Generate API types from `backend/api/openapi.yaml`. Do not hand-roll request/response interfaces that duplicate the spec.
+- Treat IDs as `string`. Never `Number(postId)` on a Snowflake ID.
+- Server Components fetch on the server with the incoming cookie when rendering first paint (feed, profile). Client components handle pagination, likes, comments, and realtime.
+- Route groups match the product: `(auth)` for sign-in/up, `(main)` for the logged-in chrome (feed, profile, friends, notifications).
+- English copy in the UI for MVP. Wrap user-facing strings so Vietnamese can land later (`next-intl` or equivalent, introduced in foundation or a dedicated i18n phase — do not scatter raw strings in dozens of files without a plan).
+- Accessibility: semantic HTML, labels on every input, keyboard-operable menus, `alt` on avatars/covers. Aim for WCAG 2.2 AA on new pages.
+- Styling: one approach once foundation picks it (documented in feature 01). Do not mix a second CSS-in-JS library without an ADR.
+
+Do not add React Native, Expo, or a separate admin SPA; admin review in feature 09 is a route in this same Next.js app, gated by role.

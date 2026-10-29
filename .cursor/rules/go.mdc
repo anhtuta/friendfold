@@ -1,0 +1,29 @@
+---
+description: Go module conventions for the Friendfold API (chi, pgx, sqlc, goose)
+globs: backend/**/*.go,backend/db/**/*.sql
+alwaysApply: false
+---
+
+# Go (backend)
+
+Stack: chi router, pgx pool, sqlc, goose, structured `slog`, Snowflake IDs. gRPC is **not** used until a module is split out of the monolith ([ADR 0001](docs/decisions/0001-go-backend.md), [ADR 0004](docs/decisions/0004-modular-monolith.md)).
+
+Layout inside a feature module:
+
+```
+internal/<feature>/
+  handler.go      # HTTP only: decode, call service, encode, map errors
+  service.go      # business rules, authorization
+  store.go        # thin wrapper over sqlc (optional if sqlc is enough)
+  types.go
+  handler_test.go
+  service_test.go
+```
+
+- Wire modules in `cmd/api` (router mounts, constructors). Feature packages must not import `cmd/`.
+- Transactions: the service starts a `pgx.Tx` when a use case touches more than one table; pass it down. Do not hold transactions open across HTTP client calls (Google OAuth, mail).
+- Time is `time.Time` in UTC, stored as `timestamptz`.
+- IDs: `int64` in Go, `BIGINT` in Postgres, decimal **strings** on the wire.
+- Tests use `t.Parallel()` where safe. Prefer a migrated test database over mocking sqlc for store tests.
+
+Do not add ORMs (GORM, ent) or a second HTTP framework.

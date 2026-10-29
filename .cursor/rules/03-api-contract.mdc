@@ -1,0 +1,18 @@
+---
+description: OpenAPI spec is the HTTP source of truth — update it before implementing endpoints
+globs: backend/api/**,backend/internal/**/*.go,frontend/**/*.ts,frontend/**/*.tsx
+alwaysApply: false
+---
+
+# API contract first
+
+`backend/api/openapi.yaml` is the only HTTP contract.
+
+1. Edit the spec **before** writing handler or client code for an endpoint.
+2. Generate Go server types and TypeScript client types from the spec. Do not duplicate models by hand.
+3. Paths live under `/v1`. JSON names are `camelCase`. Resource IDs are JSON **strings** (Snowflake 64-bit values are not safe as JS numbers — [ADR 0006](docs/decisions/0006-snowflake-ids.md)).
+4. Every operation documents: auth (`cookieAuth` or `none`), path/query/body, success schema, and error codes (`400`, `401`, `403`, `404`, `409`, `429`).
+5. Error envelope: `{ "error": { "code": "string", "message": "string", "details": {} } }`.
+6. Pagination is cursor-based (`?cursor=&limit=`), never offset, for any list that can grow.
+
+If the spec and the code disagree, the spec is wrong or the code is wrong — fix both in the same PR. See the feature plan's **API endpoints** section for the intended surface, then put the precise schemas in OpenAPI.

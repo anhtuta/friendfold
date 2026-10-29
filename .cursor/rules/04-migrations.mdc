@@ -1,0 +1,16 @@
+---
+description: Every schema change is a goose migration; never edit merged migrations; sqlc for queries
+globs: backend/db/**,backend/internal/**/*.go
+alwaysApply: false
+---
+
+# Migrations
+
+- All schema changes are goose SQL files in `backend/db/migrations/` (`NNNNNN_name.sql` with `-- +goose Up` / `-- +goose Down`).
+- Never edit a migration that already landed on `main`. Follow up with a new file.
+- Expand/contract: add nullable columns and new tables first; backfill; then add `NOT NULL`/constraints in a later migration after the code that writes them has shipped.
+- Pair every new table with the indexes named in that feature's **Data model** section (especially `(user_id, created_at DESC)` and unique constraints on Snowflake IDs).
+- Queries live in `backend/db/queries/*.sql` and are generated with sqlc. No SQL strings in handlers.
+- `Down` must be safe in local/dev. Do not rely on `Down` in production; production rollbacks are expand/contract + revert the app.
+
+IDs are `BIGINT` primary keys populated by the app (Snowflake), not `BIGSERIAL`, except for tiny internal lookup tables. See [ADR 0006](docs/decisions/0006-snowflake-ids.md).
