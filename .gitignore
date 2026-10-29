@@ -9,10 +9,11 @@ bin/
 coverage.out
 coverage.html
 
-# Node / Next.js (frontend lands in a later phase)
+# Node / Next.js
 node_modules/
 .next/
 out/
+frontend/coverage/
 
 # OS
 .DS_Store
