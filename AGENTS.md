@@ -118,6 +118,8 @@ Next number is `0009`. Status is `Proposed`, `Accepted`, `Superseded by NNNN`, o
 
 Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`. Scopes match modules (`auth`, `profile`, `friend`, `post`, `feed`, `reaction`, `comment`, `notification`, `safety`, `platform`) or `docs`, `web`.
 
+**Git LFS:** Binary files (images, video, fonts, and other non-text assets) must be stored with Git LFS. Track them in `.gitattributes`; do not commit raw binaries as regular git blobs.
+
 **Go:** `gofmt` (and `goimports`). `context.Context` is the first argument. Wrap errors with `%w`. No package-level `init()` that connects to the network. Handlers decode/encode only; business rules live in the module's service. Log with structured fields (`request_id`, `user_id`, `error`), never with `fmt.Println`.
 
 **TypeScript:** `strict` true, no `any`, no unused locals. App Router; Server Components by default; `"use client"` only when needed. Named exports. One component per file, filename matches the export.
