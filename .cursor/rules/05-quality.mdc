@@ -6,6 +6,7 @@ alwaysApply: true
 # Quality
 
 - **Tests in the same PR** as the behavior. Backend: table-driven tests around the service layer; handler tests for authz and validation. Frontend: tests for the user-visible happy path and the important error/empty states of the page you touched.
+- **UI screenshots:** every PR that changes user-visible UI (pages, layout, styling, or components) must embed screenshots of the affected pages and states in the PR description so they render on GitHub. When changing existing UI, include **before and after**. Cover the important states you touched (happy path plus error/empty when those are visible). Docs-only, API-only, and non-visual changes are exempt.
 - Cover authorization denials (blocked user, `only_me` post, expired session) — not only the happy path.
 - **Lint + types + tests green** before you push. CI (GitHub Actions, once feature 01 exists) is the merge gate.
 - **Small PRs:** one concern, independently reviewable. Do not mix a feed change with an unrelated auth refactor. If a plan phase has more than one distinct concern, split it into stacked PRs rather than one large phase PR.

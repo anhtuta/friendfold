@@ -97,6 +97,7 @@ Next number is `0008`. Status is `Proposed`, `Accepted`, `Superseded by NNNN`, o
 ## (f) Quality
 
 - Tests ship in the same PR as the change: Go table-driven unit tests around the service layer, HTTP handler tests with a test database or tightly scoped fakes, and frontend tests for user-visible behavior.
+- **UI screenshots in the PR description.** Every pull request that changes user-visible UI (pages, layout, styling, or components) must embed screenshots of the affected pages and states in the PR description so they render on GitHub (Markdown images or HTML `<img>` tags). When changing existing UI, include **before and after**. Cover the important states you touched (happy path plus error/empty when those are visible). Docs-only, API-only, and non-visual changes are exempt.
 - Lint and typecheck must be green locally; CI on GitHub Actions is the gate.
 - PRs are small and focused — **one concern**, independently reviewable. A phase may be multiple PRs; do not combine unrelated concerns. If a PR is hard to review, split it.
 - Do not merge with skipped tests, `as any`, or `//nolint` without a one-line justification.
