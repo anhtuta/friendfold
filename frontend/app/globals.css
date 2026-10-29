@@ -9,6 +9,10 @@
   --color-muted: #c5ccd8;
   --color-subtle: #a3adbd;
   --color-accent: #8ec5ff;
+  --color-on-accent: #10141c;
+  --color-surface: #1a212d;
+  --color-border: #4a5568;
+  --color-danger: #f5a8a8;
 }
 
 @layer base {
