@@ -194,6 +194,8 @@ Work:
 - Document `WEB_ORIGIN` and `NEXT_PUBLIC_API_BASE_URL` (or server-only `API_BASE_URL`).
 - Pick and document the styling approach in this phase's PR description and in this doc (update this file).
 
+Scaffold (this slice): Next.js 16 App Router in `frontend/`, `strict` TypeScript, Tailwind v4 ([ADR 0007](../decisions/0007-tailwind-css.md)), root layout `lang="en"` + Inter as the placeholder font. Home and `/health` copy land in following PRs.
+
 Acceptance:
 
 - [ ] `npx tsc --noEmit` and production build succeed.
