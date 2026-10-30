@@ -1,11 +1,21 @@
 version: "2"
 sql:
   - engine: postgresql
-    queries: db/queries
-    schema: db/migrations
+    queries: db/queries/ping.sql
+    # Bootstrap only so platform generated models do not include feature tables.
+    schema: db/migrations/00001_bootstrap.sql
     gen:
       go:
         package: sqlc
         out: internal/platform/db/sqlc
+        sql_package: pgx/v5
+        emit_empty_slices: true
+  - engine: postgresql
+    queries: db/queries/auth.sql
+    schema: db/migrations
+    gen:
+      go:
+        package: sqlc
+        out: internal/auth/sqlc
         sql_package: pgx/v5
         emit_empty_slices: true

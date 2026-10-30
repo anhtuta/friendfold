@@ -63,7 +63,7 @@ A person can create a Friendfold account with email and password or with Google,
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | `BIGINT PK` | Snowflake |
-| `email` | `CITEXT` or `TEXT` | Unique among non-deleted; store lowercased |
+| `email` | `TEXT` | Unique among non-deleted; store lowercased (no `citext`) |
 | `email_verified_at` | `timestamptz NULL` | |
 | `password_hash` | `TEXT NULL` | argon2id encoded hash; NULL if Google-only so far |
 | `display_name` | `TEXT NOT NULL` | 1–80 chars; profile 03 may split this |
@@ -75,8 +75,10 @@ A person can create a Friendfold account with email and password or with Google,
 
 Indexes:
 
-- unique `(email) WHERE deleted_at IS NULL`
+- unique `(email) WHERE deleted_at IS NULL` (`users_email_live_key`)
 - `(id)` PK
+
+sqlc: `backend/db/queries/auth.sql` generates into `internal/auth/sqlc` (a second sqlc package). Platform `ping.sql` is generated separately so the kernel does not import the `users` table.
 
 ### `oauth_accounts`
 
