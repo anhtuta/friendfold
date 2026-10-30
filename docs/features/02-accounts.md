@@ -1,6 +1,6 @@
 # Feature 02: Accounts
 
-**Status:** Not started  
+**Status:** In progress (phase 1)  
 **Owner:** —  
 **Plan version:** 1
 
@@ -121,17 +121,19 @@ Redis:
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
-| `POST` | `/v1/auth/register` | public | Create account, set session cookie |
-| `POST` | `/v1/auth/login` | public | Password login |
-| `POST` | `/v1/auth/logout` | user | Revoke session, clear cookie |
-| `GET` | `/v1/auth/me` | user | Current user |
-| `GET` | `/v1/auth/google/start` | public | Begin OAuth |
-| `GET` | `/v1/auth/google/callback` | public | Finish OAuth, set cookie, redirect to web |
-| `POST` | `/v1/auth/verify-email` | public | Body: `{ token }` |
-| `POST` | `/v1/auth/resend-verification` | user | Send a new verify email |
-| `POST` | `/v1/auth/password/forgot` | public | Always 202 |
-| `POST` | `/v1/auth/password/reset` | public | Body: `{ token, newPassword }` |
-| `POST` | `/v1/auth/password/change` | user | Body: `{ currentPassword?, newPassword }` |
+| `POST` | `/v1/auth/register` | public | Create account, set session cookie. Body: `{ email, password, displayName, dateOfBirth, termsAccepted }`. 201 `User`. Errors: 400 `validation_error` / `underage` / `terms_required`, 403 `origin_mismatch`, 409 `email_taken`, 429 `rate_limited`. |
+| `POST` | `/v1/auth/login` | public | Password login. Body: `{ email, password }`. 200 `User`. Unknown vs bad password both 401 `invalid_credentials`. |
+| `POST` | `/v1/auth/logout` | user | Revoke session, clear cookie. 204. |
+| `GET` | `/v1/auth/me` | user | Current user: `{ id, email, emailVerified, displayName }`. DOB is not returned. |
+| `GET` | `/v1/auth/google/start` | public | Begin OAuth (phase 4) |
+| `GET` | `/v1/auth/google/callback` | public | Finish OAuth, set cookie, redirect to web (phase 4) |
+| `POST` | `/v1/auth/verify-email` | public | Body: `{ token }` (phase 2) |
+| `POST` | `/v1/auth/resend-verification` | user | Send a new verify email (phase 2) |
+| `POST` | `/v1/auth/password/forgot` | public | Always 202 (phase 3) |
+| `POST` | `/v1/auth/password/reset` | public | Body: `{ token, newPassword }` (phase 3) |
+| `POST` | `/v1/auth/password/change` | user | Body: `{ currentPassword?, newPassword }` (phase 3) |
+
+`User.id` is a Snowflake decimal **string**. Register/login set `Set-Cookie: friendfold_session`. Mutating `/v1/auth/*` require `Origin` matching `WEB_ORIGIN`. Precise schemas live in `backend/api/openapi.yaml`.
 
 CSRF: mutating `/v1/auth/*` that rely on cookies require Origin matching `WEB_ORIGIN`. Login/register send credentials in JSON body (not cookies) then **set** the cookie.
 
@@ -176,8 +178,14 @@ Unverified banner on the main chrome: "Check your email" with resend.
 
 ### Phase 1 — Email/password register, login, logout, me, sessions
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** split into five stacked PRs (one concern each); merge in this order:
+
+1. OpenAPI register / login / logout / me (this PR)
+2. `users` table migration + sqlc
+3. Platform sessions, cookies, Origin check, rate limit
+4. Auth module (argon2id, handlers)
+5. Frontend `/signup`, `/login`, sign-out, `GET /me`
 
 Work:
 
@@ -190,6 +198,13 @@ Acceptance:
 - [ ] Register + login + me + logout round-trip in tests and in the browser.
 - [ ] Password not stored plaintext; cookie HttpOnly.
 - [ ] Unknown vs bad password both 401.
+
+Decisions / deviations (phase 1):
+
+- **Verification email is phase 2.** `POST /v1/auth/register` in phase 1 creates the user and session only (`emailVerified: false`). F-02-01's "sends a verification email" waits for phase 2 so this phase stays one concern.
+- **Google button and forgot-password link** wait for phases 4 and 3. `/signup` and `/login` are email/password only.
+- **Mutating `/v1/auth/*` require `Origin` matching `WEB_ORIGIN`**, including register/login (not only cookie-authenticated writes). Browser `fetch` always sends Origin; curl must pass `-H Origin: …`.
+- Email column is `TEXT` stored lowercased (no `citext` extension). Unique `(email) WHERE deleted_at IS NULL`.
 
 ### Phase 2 — Email verification
 

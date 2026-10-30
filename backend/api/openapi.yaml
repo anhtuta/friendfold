@@ -12,9 +12,12 @@ info:
     The public ready probe is the exception: a failed dependency ping returns
     `{"status":"unavailable"}` with no dependency names or URLs.
 
-    These platform probes are public (`security: []`). Later user operations
-    authenticate with `cookieAuth` (cookie `friendfold_session`, feature 02).
-    The scheme is declared here so the name stays stable.
+    Platform probes are public (`security: []`). User operations authenticate
+    with `cookieAuth` (cookie `friendfold_session`).
+
+    Mutating `/v1/auth/*` requests must send `Origin` matching `WEB_ORIGIN`.
+    Login and register send credentials in the JSON body, then set the session
+    cookie. Logout and other cookie-authenticated writes also require Origin.
 
     Every response includes `X-Request-Id` (echoed from the client when valid,
     otherwise generated).
@@ -24,6 +27,8 @@ servers:
 tags:
   - name: platform
     description: Process liveness and dependency readiness. No product data.
+  - name: auth
+    description: Email/password accounts and server-side sessions.
 security: []
 paths:
   /v1/health:
@@ -88,6 +93,157 @@ paths:
                 unavailable:
                   value:
                     status: unavailable
+  /v1/auth/register:
+    post:
+      operationId: registerUser
+      tags:
+        - auth
+      summary: Create an account
+      description: |
+        Creates a user with an argon2id password hash, starts a server-side
+        session, and sets the `friendfold_session` cookie.
+
+        Password: 8–72 bytes, must not equal the email (case-insensitive).
+        Date of birth must be 13+ (UTC calendar date). `termsAccepted` must be
+        true. Email is stored lowercased; a live (non-deleted) email is unique.
+
+        Phase 1 does not send a verification email (that is phase 2). The
+        account can use the product with `emailVerified: false`.
+
+        Unknown JSON fields are rejected. Rate limited per IP and per email hash.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            examples:
+              signup:
+                value:
+                  email: minh@example.com
+                  password: correct-horse-battery
+                  displayName: Minh
+                  dateOfBirth: "1998-04-12"
+                  termsAccepted: true
+      responses:
+        "201":
+          description: Account created; session cookie set
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Set-Cookie:
+              $ref: "#/components/headers/SetSessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+              examples:
+                created:
+                  value:
+                    id: "193848201234567890"
+                    email: minh@example.com
+                    emailVerified: false
+                    displayName: Minh
+        "400":
+          $ref: "#/components/responses/RegisterValidationError"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "409":
+          $ref: "#/components/responses/EmailTaken"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/auth/login:
+    post:
+      operationId: loginUser
+      tags:
+        - auth
+      summary: Sign in with email and password
+      description: |
+        Authenticates email + password, starts a session, and sets the
+        `friendfold_session` cookie.
+
+        Unknown email and wrong password both return 401 `invalid_credentials`
+        with the same body (no user enumeration). Rate limited per IP and per
+        email hash. Unknown JSON fields are rejected.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            examples:
+              login:
+                value:
+                  email: minh@example.com
+                  password: correct-horse-battery
+      responses:
+        "200":
+          description: Authenticated; session cookie set
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Set-Cookie:
+              $ref: "#/components/headers/SetSessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/InvalidCredentials"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/auth/logout:
+    post:
+      operationId: logoutUser
+      tags:
+        - auth
+      summary: Sign out
+      description: |
+        Revokes the current session in Redis and clears the session cookie.
+        Requires a valid session cookie and Origin matching `WEB_ORIGIN`.
+      security:
+        - cookieAuth: []
+      responses:
+        "204":
+          description: Session revoked; cookie cleared
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Set-Cookie:
+              $ref: "#/components/headers/ClearSessionCookie"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+  /v1/auth/me:
+    get:
+      operationId: getCurrentUser
+      tags:
+        - auth
+      summary: Current user
+      description: |
+        Returns the signed-in user. Requires a valid session cookie.
+        Date of birth is not included (personal data; not shown on profiles).
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: The authenticated user
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
 components:
   securitySchemes:
     cookieAuth:
@@ -95,8 +251,9 @@ components:
       in: cookie
       name: friendfold_session
       description: |
-        Opaque session id. Flags (feature 02): HttpOnly; Secure; SameSite=Lax;
-        Path=/. Declared now; first used when accounts land.
+        Opaque session id stored in Redis (`session:{id}`). Cookie flags:
+        HttpOnly; SameSite=Lax; Path=/. Secure is on unless `COOKIE_SECURE=false`
+        (local HTTP). TTL 30 days, sliding refresh at most once per hour.
   headers:
     RequestId:
       description: Echoed or generated request correlation id
@@ -104,6 +261,16 @@ components:
         type: string
         minLength: 1
         maxLength: 128
+    SetSessionCookie:
+      description: |
+        Sets `friendfold_session`. Flags: HttpOnly; SameSite=Lax; Path=/.
+        Secure unless `COOKIE_SECURE=false`.
+      schema:
+        type: string
+    ClearSessionCookie:
+      description: Clears `friendfold_session` (Max-Age=0).
+      schema:
+        type: string
   responses:
     Error:
       description: Application error using the shared envelope
@@ -120,6 +287,128 @@ components:
                 error:
                   code: not_found
                   message: Resource not found
+    ValidationError:
+      description: Request JSON failed validation
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            invalid:
+              value:
+                error:
+                  code: validation_error
+                  message: Request is invalid
+    RegisterValidationError:
+      description: |
+        Register validation failed. `error.code` is one of `validation_error`,
+        `underage`, or `terms_required`.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            underage:
+              value:
+                error:
+                  code: underage
+                  message: You must be at least 13 years old
+            terms:
+              value:
+                error:
+                  code: terms_required
+                  message: Terms of use and privacy policy must be accepted
+            invalid:
+              value:
+                error:
+                  code: validation_error
+                  message: Request is invalid
+    InvalidCredentials:
+      description: Unknown email or wrong password (same body either way)
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            invalid:
+              value:
+                error:
+                  code: invalid_credentials
+                  message: Email or password is incorrect
+    Unauthenticated:
+      description: Missing or invalid session
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            unauthenticated:
+              value:
+                error:
+                  code: unauthenticated
+                  message: Authentication required
+    OriginMismatch:
+      description: Mutating request Origin does not match WEB_ORIGIN
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            mismatch:
+              value:
+                error:
+                  code: origin_mismatch
+                  message: Request origin is not allowed
+    EmailTaken:
+      description: Email already registered
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            taken:
+              value:
+                error:
+                  code: email_taken
+                  message: Email is already registered
+    RateLimited:
+      description: Too many attempts from this IP or email
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+        Retry-After:
+          description: Seconds until the client may retry
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            limited:
+              value:
+                error:
+                  code: rate_limited
+                  message: Too many attempts. Try again later
   schemas:
     HealthResponse:
       type: object
@@ -167,3 +456,76 @@ components:
         - error:
             code: not_found
             message: Resource not found
+    SnowflakeId:
+      type: string
+      pattern: "^[0-9]+$"
+      minLength: 1
+      maxLength: 20
+      description: Decimal string of a 64-bit Snowflake ID.
+    User:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - email
+        - emailVerified
+        - displayName
+      properties:
+        id:
+          $ref: "#/components/schemas/SnowflakeId"
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        emailVerified:
+          type: boolean
+          description: Always false until feature 02 phase 2 (email verification).
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - password
+        - displayName
+        - dateOfBirth
+        - termsAccepted
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: 8–72 bytes; must not equal the email.
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        dateOfBirth:
+          type: string
+          format: date
+          description: Calendar date `YYYY-MM-DD`. Must be 13+ in UTC.
+        termsAccepted:
+          type: boolean
+          description: Must be true; false returns 400 `terms_required`.
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          minLength: 1
+          maxLength: 72
