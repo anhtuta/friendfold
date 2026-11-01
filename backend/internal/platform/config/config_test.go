@@ -14,6 +14,7 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("DATABASE_READ_URL", "")
 	t.Setenv("REDIS_URL", "")
 	t.Setenv("PGX_MAX_CONNS", "")
+	t.Setenv("COOKIE_SECURE", "")
 	// Empty values fall back to defaults. Clearing avoids leakage from the
 	// process environment.
 
@@ -45,6 +46,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.PGXMaxConns != defaultPGXMaxConns {
 		t.Errorf("PGXMaxConns = %d, want %d", cfg.PGXMaxConns, defaultPGXMaxConns)
 	}
+	if cfg.CookieSecure {
+		t.Error("CookieSecure = true, want false when WEB_ORIGIN is http")
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -56,6 +60,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("DATABASE_READ_URL", "postgres://r@db/read")
 	t.Setenv("REDIS_URL", "redis://127.0.0.1:6380/1")
 	t.Setenv("PGX_MAX_CONNS", "8")
+	t.Setenv("COOKIE_SECURE", "true")
 
 	cfg, err := Load()
 	if err != nil {
@@ -84,6 +89,28 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.PGXMaxConns != 8 {
 		t.Errorf("PGXMaxConns = %d, want 8", cfg.PGXMaxConns)
+	}
+	if !cfg.CookieSecure {
+		t.Error("CookieSecure = false, want true from COOKIE_SECURE")
+	}
+}
+
+func TestCookieSecureFollowsHTTPSOrigin(t *testing.T) {
+	t.Setenv("WEB_ORIGIN", "https://friendfold.example")
+	t.Setenv("COOKIE_SECURE", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.CookieSecure {
+		t.Error("CookieSecure = false, want true for https WEB_ORIGIN")
+	}
+}
+
+func TestCookieSecureRejectsGarbage(t *testing.T) {
+	t.Setenv("COOKIE_SECURE", "sometimes")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error for invalid COOKIE_SECURE")
 	}
 }
 

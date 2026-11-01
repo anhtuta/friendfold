@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ type Config struct {
 	DatabaseReadURL   string
 	RedisURL          string
 	PGXMaxConns       int32
+	CookieSecure      bool
 }
 
 const (
@@ -72,7 +74,33 @@ func Load() (Config, error) {
 	}
 	cfg.PGXMaxConns = int32(maxConns)
 
+	secure, err := cookieSecure(cfg.WebOrigin, os.Getenv("COOKIE_SECURE"))
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.CookieSecure = secure
+
 	return cfg, nil
+}
+
+// cookieSecure is true when COOKIE_SECURE is set truthy. When unset, it
+// follows WEB_ORIGIN: https → true, http → false (local HTTP).
+func cookieSecure(webOrigin, raw string) (bool, error) {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	switch raw {
+	case "true", "1", "yes":
+		return true, nil
+	case "false", "0", "no":
+		return false, nil
+	case "":
+		u, err := url.Parse(webOrigin)
+		if err != nil {
+			return false, fmt.Errorf("config: parse WEB_ORIGIN for COOKIE_SECURE: %w", err)
+		}
+		return u.Scheme == "https", nil
+	default:
+		return false, fmt.Errorf("config: invalid COOKIE_SECURE %q (want true or false)", raw)
+	}
 }
 
 func envOr(key, fallback string) string {

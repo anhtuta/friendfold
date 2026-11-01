@@ -207,6 +207,9 @@ Decisions / deviations (phase 1):
 - **Google button and forgot-password link** wait for phases 4 and 3. `/signup` and `/login` are email/password only.
 - **Mutating `/v1/auth/*` require `Origin` matching `WEB_ORIGIN`**, including register/login (not only cookie-authenticated writes). Browser `fetch` always sends Origin; curl must pass `-H Origin: …`.
 - Email column is `TEXT` stored lowercased (no `citext` extension). Unique `(email) WHERE deleted_at IS NULL`.
+- **`COOKIE_SECURE`:** explicit `true`/`false` overrides. When unset, `Secure` follows `WEB_ORIGIN` (`https` → true, `http` → false) so local `go run` works without a `.env`.
+- **Client IP** for rate limits is `RemoteAddr` only. `X-Forwarded-For` is not trusted until a reverse-proxy config exists.
+- Rate limiter is a Redis sliding window in `internal/platform/ratelimit` (ZSET + Lua). Auth keys: `rate:auth:{action}:{ip}` and `rate:auth:{action}:{emailHash}`. Limits (phase 1): register 5/15min per IP and 3/15min per email hash; login 10/15min per IP and per email hash.
 
 ### Phase 2 — Email verification
 

@@ -41,3 +41,11 @@ func (c *Client) Close() error {
 	}
 	return c.inner.Close()
 }
+
+// Cmdable returns the underlying Redis client for session and rate-limit use.
+func (c *Client) Cmdable() redis.Cmdable {
+	if c == nil {
+		return nil
+	}
+	return c.inner
+}
