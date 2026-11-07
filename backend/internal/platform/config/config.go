@@ -19,6 +19,12 @@ type Config struct {
 	RedisURL          string
 	PGXMaxConns       int32
 	CookieSecure      bool
+	SMTPHost          string
+	SMTPPort          int
+	SMTPUsername      string
+	SMTPPassword      string
+	SMTPFrom          string
+	SMTPStartTLS      bool
 }
 
 const (
@@ -30,20 +36,30 @@ const (
 	defaultDatabaseURL = "postgres://friendfold:friendfold@127.0.0.1:5432/friendfold?sslmode=disable"
 	defaultRedisURL    = "redis://127.0.0.1:6379/0"
 	defaultPGXMaxConns = int32(10)
+	// Local Mailpit (docker-compose.yml). Not for production.
+	defaultSMTPHost = "127.0.0.1"
+	defaultSMTPPort = 1025
+	defaultSMTPFrom = "Friendfold <friendfold@localhost>"
 
 	maxSnowflakeWorkerID = 1023 // 10 bits in the Snowflake layout
 	minPGXMaxConns       = 1
 	maxPGXMaxConns       = 100
+	minSMTPPort          = 1
+	maxSMTPPort          = 65535
 )
 
 // Load reads configuration from environment variables.
 func Load() (Config, error) {
 	cfg := Config{
-		APIAddr:     envOr("API_ADDR", defaultAPIAddr),
-		LogLevel:    strings.ToLower(envOr("LOG_LEVEL", defaultLogLevel)),
-		WebOrigin:   envOr("WEB_ORIGIN", defaultWebOrigin),
-		DatabaseURL: envOr("DATABASE_URL", defaultDatabaseURL),
-		RedisURL:    envOr("REDIS_URL", defaultRedisURL),
+		APIAddr:      envOr("API_ADDR", defaultAPIAddr),
+		LogLevel:     strings.ToLower(envOr("LOG_LEVEL", defaultLogLevel)),
+		WebOrigin:    envOr("WEB_ORIGIN", defaultWebOrigin),
+		DatabaseURL:  envOr("DATABASE_URL", defaultDatabaseURL),
+		RedisURL:     envOr("REDIS_URL", defaultRedisURL),
+		SMTPHost:     envOr("SMTP_HOST", defaultSMTPHost),
+		SMTPUsername: os.Getenv("SMTP_USERNAME"),
+		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:     envOr("SMTP_FROM", defaultSMTPFrom),
 	}
 
 	cfg.DatabaseReadURL = envOr("DATABASE_READ_URL", cfg.DatabaseURL)
@@ -80,6 +96,22 @@ func Load() (Config, error) {
 	}
 	cfg.CookieSecure = secure
 
+	rawPort := envOr("SMTP_PORT", strconv.Itoa(defaultSMTPPort))
+	port, err := strconv.Atoi(rawPort)
+	if err != nil {
+		return Config{}, fmt.Errorf("config: parse SMTP_PORT: %w", err)
+	}
+	if port < minSMTPPort || port > maxSMTPPort {
+		return Config{}, fmt.Errorf("config: SMTP_PORT %d out of range %d–%d", port, minSMTPPort, maxSMTPPort)
+	}
+	cfg.SMTPPort = port
+
+	startTLS, err := parseBoolEnv("SMTP_STARTTLS", os.Getenv("SMTP_STARTTLS"), false)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.SMTPStartTLS = startTLS
+
 	return cfg, nil
 }
 
@@ -100,6 +132,20 @@ func cookieSecure(webOrigin, raw string) (bool, error) {
 		return u.Scheme == "https", nil
 	default:
 		return false, fmt.Errorf("config: invalid COOKIE_SECURE %q (want true or false)", raw)
+	}
+}
+
+func parseBoolEnv(name, raw string, unset bool) (bool, error) {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	switch raw {
+	case "true", "1", "yes":
+		return true, nil
+	case "false", "0", "no":
+		return false, nil
+	case "":
+		return unset, nil
+	default:
+		return false, fmt.Errorf("config: invalid %s %q (want true or false)", name, raw)
 	}
 }
 
