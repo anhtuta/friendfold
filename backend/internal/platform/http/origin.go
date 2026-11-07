@@ -1,9 +1,7 @@
 package httpx
 
 import (
-	"net"
 	"net/http"
-	"strings"
 )
 
 // RequireOrigin rejects mutating requests whose Origin is missing or not
@@ -32,14 +30,4 @@ func mutatingMethod(method string) bool {
 	default:
 		return false
 	}
-}
-
-// ClientIP returns the remote host, ignoring X-Forwarded-For until a trusted
-// proxy is configured (attackers can spoof that header).
-func ClientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return strings.TrimSpace(r.RemoteAddr)
-	}
-	return host
 }
