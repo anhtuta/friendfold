@@ -227,7 +227,7 @@ Decisions / deviations (phase 1):
 3. https://github.com/anhtuta/friendfold/pull/28 — `auth_tokens` goose migration + sqlc
 4. https://github.com/anhtuta/friendfold/pull/29 — platform SMTP sender + Mailpit config
 5. https://github.com/anhtuta/friendfold/pull/30 — auth module: hashed tokens, verify/resend, register enqueues mail
-6. frontend `/verify-email`, unverified banner, resend (this PR; URL filled when opened)
+6. https://github.com/anhtuta/friendfold/pull/31 — frontend `/verify-email`, unverified banner, resend
 
 Work:
 
