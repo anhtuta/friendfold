@@ -35,9 +35,6 @@ func NewQueue(sender Sender, logger *slog.Logger, workers int, ctx context.Conte
 	if workers < 1 {
 		workers = defaultWorkers
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	return &Queue{
 		sender:  sender,
 		logger:  logger,
