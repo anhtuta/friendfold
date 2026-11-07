@@ -11,6 +11,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const consumeAuthToken = `-- name: ConsumeAuthToken :one
+UPDATE auth_tokens
+SET consumed_at = $2
+WHERE token_hash = $1
+  AND consumed_at IS NULL
+  AND expires_at > $2
+RETURNING id, user_id, purpose, token_hash, expires_at, consumed_at, created_at
+`
+
+type ConsumeAuthTokenParams struct {
+	TokenHash  []byte
+	ConsumedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ConsumeAuthToken(ctx context.Context, arg ConsumeAuthTokenParams) (AuthToken, error) {
+	row := q.db.QueryRow(ctx, consumeAuthToken, arg.TokenHash, arg.ConsumedAt)
+	var i AuthToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Purpose,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, email_verified_at, password_hash, display_name, date_of_birth, terms_accepted_at, created_at, updated_at, deleted_at
 FROM users
@@ -55,6 +84,52 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const insertAuthToken = `-- name: InsertAuthToken :one
+INSERT INTO auth_tokens (
+    id,
+    user_id,
+    purpose,
+    token_hash,
+    expires_at,
+    consumed_at,
+    created_at
+) VALUES (
+    $1, $2, $3, $4, $5, NULL, $6
+)
+RETURNING id, user_id, purpose, token_hash, expires_at, consumed_at, created_at
+`
+
+type InsertAuthTokenParams struct {
+	ID        int64
+	UserID    int64
+	Purpose   string
+	TokenHash []byte
+	ExpiresAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) InsertAuthToken(ctx context.Context, arg InsertAuthTokenParams) (AuthToken, error) {
+	row := q.db.QueryRow(ctx, insertAuthToken,
+		arg.ID,
+		arg.UserID,
+		arg.Purpose,
+		arg.TokenHash,
+		arg.ExpiresAt,
+		arg.CreatedAt,
+	)
+	var i AuthToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Purpose,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -111,4 +186,42 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const invalidateUnusedAuthTokens = `-- name: InvalidateUnusedAuthTokens :exec
+UPDATE auth_tokens
+SET consumed_at = $3
+WHERE user_id = $1
+  AND purpose = $2
+  AND consumed_at IS NULL
+`
+
+type InvalidateUnusedAuthTokensParams struct {
+	UserID     int64
+	Purpose    string
+	ConsumedAt pgtype.Timestamptz
+}
+
+func (q *Queries) InvalidateUnusedAuthTokens(ctx context.Context, arg InvalidateUnusedAuthTokensParams) error {
+	_, err := q.db.Exec(ctx, invalidateUnusedAuthTokens, arg.UserID, arg.Purpose, arg.ConsumedAt)
+	return err
+}
+
+const markEmailVerified = `-- name: MarkEmailVerified :execrows
+UPDATE users
+SET email_verified_at = $2, updated_at = $2
+WHERE id = $1 AND deleted_at IS NULL AND email_verified_at IS NULL
+`
+
+type MarkEmailVerifiedParams struct {
+	ID              int64
+	EmailVerifiedAt pgtype.Timestamptz
+}
+
+func (q *Queries) MarkEmailVerified(ctx context.Context, arg MarkEmailVerifiedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markEmailVerified, arg.ID, arg.EmailVerifiedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
