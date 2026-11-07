@@ -18,6 +18,7 @@ import (
 	httpx "github.com/anhtuta/friendfold/backend/internal/platform/http"
 	"github.com/anhtuta/friendfold/backend/internal/platform/id"
 	platformlog "github.com/anhtuta/friendfold/backend/internal/platform/log"
+	"github.com/anhtuta/friendfold/backend/internal/platform/mail"
 	"github.com/anhtuta/friendfold/backend/internal/platform/ratelimit"
 	redisx "github.com/anhtuta/friendfold/backend/internal/platform/redis"
 	"github.com/anhtuta/friendfold/backend/internal/platform/session"
@@ -71,6 +72,16 @@ func run() int {
 		Read:  pools.Read,
 		Redis: rdb,
 	})
+	mailCtx, mailCancel := context.WithCancel(context.Background())
+	defer mailCancel()
+	mailer := mail.NewQueue(&mail.SMTP{
+		Host:     cfg.SMTPHost,
+		Port:     cfg.SMTPPort,
+		Username: cfg.SMTPUsername,
+		Password: cfg.SMTPPassword,
+		From:     cfg.SMTPFrom,
+		StartTLS: cfg.SMTPStartTLS,
+	}, logger, 8, mailCtx)
 	auth.NewHandler(
 		auth.NewService(
 			auth.NewStore(pools.Write),
@@ -78,6 +89,8 @@ func run() int {
 			hasher,
 			gen,
 			ratelimit.New(rdb.Cmdable()),
+			mailer,
+			cfg.WebOrigin,
 			logger,
 		),
 		cfg.CookieSecure,
@@ -110,6 +123,13 @@ func run() int {
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			logger.Error("shutdown", slog.String("error", err.Error()))
+			mailCancel()
+			_ = mailer.Shutdown(shutdownCtx)
+			return 1
+		}
+		mailCancel()
+		if err := mailer.Shutdown(shutdownCtx); err != nil {
+			logger.Error("mail shutdown", slog.String("error", err.Error()))
 			return 1
 		}
 	}

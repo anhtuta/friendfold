@@ -14,14 +14,14 @@ import (
 
 const testOrigin = "http://localhost:3000"
 
-func testHandler(t *testing.T) http.Handler {
+func testHandler(t *testing.T) (http.Handler, *recordingMail) {
 	t.Helper()
-	svc, _ := testService(t)
+	svc, _, rec := testService(t)
 	h := NewHandler(svc, false, testOrigin)
 	r := chi.NewRouter()
 	r.Use(httpx.RequestID)
 	h.Mount(r)
-	return r
+	return r, rec
 }
 
 func doJSON(t *testing.T, h http.Handler, method, path, body string, cookies []*http.Cookie) *httptest.ResponseRecorder {
@@ -50,7 +50,7 @@ func sessionCookie(t *testing.T, rec *httptest.ResponseRecorder) *http.Cookie {
 
 func TestRegisterLoginMeLogoutRoundTrip(t *testing.T) {
 	t.Parallel()
-	h := testHandler(t)
+	h, _ := testHandler(t)
 	registerBody := `{
 		"email":"minh@example.com",
 		"password":"correct-horse-battery",
@@ -100,7 +100,7 @@ func TestRegisterLoginMeLogoutRoundTrip(t *testing.T) {
 
 func TestLoginUnknownAndBadPasswordSame401(t *testing.T) {
 	t.Parallel()
-	h := testHandler(t)
+	h, _ := testHandler(t)
 	doJSON(t, h, http.MethodPost, "/v1/auth/register", `{
 		"email":"minh@example.com",
 		"password":"correct-horse-battery",
@@ -126,7 +126,7 @@ func TestLoginUnknownAndBadPasswordSame401(t *testing.T) {
 
 func TestRegisterValidation(t *testing.T) {
 	t.Parallel()
-	h := testHandler(t)
+	h, _ := testHandler(t)
 	under := doJSON(t, h, http.MethodPost, "/v1/auth/register", `{
 		"email":"kid@example.com",
 		"password":"correct-horse-battery",
@@ -164,7 +164,7 @@ func TestRegisterValidation(t *testing.T) {
 
 func TestRegisterDuplicateEmail(t *testing.T) {
 	t.Parallel()
-	h := testHandler(t)
+	h, _ := testHandler(t)
 	body := `{
 		"email":"minh@example.com",
 		"password":"correct-horse-battery",
@@ -183,7 +183,7 @@ func TestRegisterDuplicateEmail(t *testing.T) {
 
 func TestOriginRejectedOnRegister(t *testing.T) {
 	t.Parallel()
-	h := testHandler(t)
+	h, _ := testHandler(t)
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Origin", "https://evil.example")
@@ -199,7 +199,7 @@ func TestOriginRejectedOnRegister(t *testing.T) {
 
 func TestMeUnauthorizedWithoutCookie(t *testing.T) {
 	t.Parallel()
-	h := testHandler(t)
+	h, _ := testHandler(t)
 	rec := doJSON(t, h, http.MethodGet, "/v1/auth/me", "", nil)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d", rec.Code)
@@ -208,7 +208,7 @@ func TestMeUnauthorizedWithoutCookie(t *testing.T) {
 
 func TestCookieNotSecureWhenConfiguredOff(t *testing.T) {
 	t.Parallel()
-	h := testHandler(t)
+	h, _ := testHandler(t)
 	reg := doJSON(t, h, http.MethodPost, "/v1/auth/register", `{
 		"email":"minh@example.com",
 		"password":"correct-horse-battery",
@@ -219,5 +219,118 @@ func TestCookieNotSecureWhenConfiguredOff(t *testing.T) {
 	c := sessionCookie(t, reg)
 	if c.Secure {
 		t.Fatal("Secure should be off when cookieSecure=false")
+	}
+}
+
+func TestVerifyEmailRoundTripAndSecondUse(t *testing.T) {
+	t.Parallel()
+	h, mailer := testHandler(t)
+	reg := doJSON(t, h, http.MethodPost, "/v1/auth/register", `{
+		"email":"minh@example.com",
+		"password":"correct-horse-battery",
+		"displayName":"Minh",
+		"dateOfBirth":"1998-04-12",
+		"termsAccepted":true
+	}`, nil)
+	if reg.Code != http.StatusCreated {
+		t.Fatalf("register: %d %s", reg.Code, reg.Body.String())
+	}
+	cookie := sessionCookie(t, reg)
+	raw := tokenFromMail(t, mailer.last())
+	body := `{"token":"` + raw + `"}`
+	first := doJSON(t, h, http.MethodPost, "/v1/auth/verify-email", body, nil)
+	if first.Code != http.StatusNoContent {
+		t.Fatalf("verify: %d %s", first.Code, first.Body.String())
+	}
+	me := doJSON(t, h, http.MethodGet, "/v1/auth/me", "", []*http.Cookie{cookie})
+	var u userBody
+	if err := json.Unmarshal(me.Body.Bytes(), &u); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if !u.EmailVerified {
+		t.Fatalf("me = %+v", u)
+	}
+	second := doJSON(t, h, http.MethodPost, "/v1/auth/verify-email", body, nil)
+	if second.Code != http.StatusBadRequest || !strings.Contains(second.Body.String(), "invalid_token") {
+		t.Fatalf("second: %d %s", second.Code, second.Body.String())
+	}
+}
+
+func TestResendVerificationInvalidatesPrevious(t *testing.T) {
+	t.Parallel()
+	h, mailer := testHandler(t)
+	reg := doJSON(t, h, http.MethodPost, "/v1/auth/register", `{
+		"email":"minh@example.com",
+		"password":"correct-horse-battery",
+		"displayName":"Minh",
+		"dateOfBirth":"1998-04-12",
+		"termsAccepted":true
+	}`, nil)
+	cookie := sessionCookie(t, reg)
+	first := tokenFromMail(t, mailer.last())
+	resend := doJSON(t, h, http.MethodPost, "/v1/auth/resend-verification", "", []*http.Cookie{cookie})
+	if resend.Code != http.StatusNoContent {
+		t.Fatalf("resend: %d %s", resend.Code, resend.Body.String())
+	}
+	old := doJSON(t, h, http.MethodPost, "/v1/auth/verify-email", `{"token":"`+first+`"}`, nil)
+	if old.Code != http.StatusBadRequest || !strings.Contains(old.Body.String(), "invalid_token") {
+		t.Fatalf("old token: %d %s", old.Code, old.Body.String())
+	}
+	fresh := tokenFromMail(t, mailer.last())
+	ok := doJSON(t, h, http.MethodPost, "/v1/auth/verify-email", `{"token":"`+fresh+`"}`, nil)
+	if ok.Code != http.StatusNoContent {
+		t.Fatalf("new token: %d %s", ok.Code, ok.Body.String())
+	}
+}
+
+func TestResendRequiresSession(t *testing.T) {
+	t.Parallel()
+	h, _ := testHandler(t)
+	rec := doJSON(t, h, http.MethodPost, "/v1/auth/resend-verification", "", nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestVerifyEmailOriginRejected(t *testing.T) {
+	t.Parallel()
+	h, _ := testHandler(t)
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/verify-email", strings.NewReader(`{"token":"x"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://evil.example")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "origin_mismatch") {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestResendOriginRejected(t *testing.T) {
+	t.Parallel()
+	h, _ := testHandler(t)
+	reg := doJSON(t, h, http.MethodPost, "/v1/auth/register", `{
+		"email":"minh@example.com",
+		"password":"correct-horse-battery",
+		"displayName":"Minh",
+		"dateOfBirth":"1998-04-12",
+		"termsAccepted":true
+	}`, nil)
+	cookie := sessionCookie(t, reg)
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/resend-verification", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "origin_mismatch") {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandlerVerifyEmailEmptyToken(t *testing.T) {
+	t.Parallel()
+	h, _ := testHandler(t)
+	rec := doJSON(t, h, http.MethodPost, "/v1/auth/verify-email", `{"token":""}`, nil)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "validation_error") {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 }
