@@ -2,7 +2,7 @@
 
 **Status:** In progress (phase 2)  
 **Owner:** —  
-**Plan version:** 1
+**Plan version:** 2
 
 ## Goal
 
@@ -48,13 +48,13 @@ A person can create a Friendfold account with email and password or with Google,
 | F-02-04 | `POST /v1/auth/logout` revokes the current session. |
 | F-02-05 | `GET /v1/auth/me` returns the current user (id, email, emailVerified, displayName). |
 | F-02-06 | Google: `GET /v1/auth/google/start` returns the authorization URL (or 302); `GET /v1/auth/google/callback` upserts `oauth_accounts`, creates user if needed, starts session. |
-| F-02-07 | Verification email contains a single-use token (≥ 32 bytes, stored hashed). `POST /v1/auth/verify-email` marks `email_verified_at`. Unverified users can still use the product in MVP but cannot reset password until verified? **Decision:** they **can** use the product; some future actions may require verified email. Password reset **does** require a verified email, or we send the reset only if the email exists **and** is verified — still no enumeration. |
+| F-02-07 | Verification email contains a single-use token (≥ 32 bytes, stored hashed, 24h TTL). `POST /v1/auth/verify-email` marks `email_verified_at`. Unverified users can still use the product in MVP. Password reset **does** require a verified email, or we send the reset only if the email exists **and** is verified — still no enumeration (phase 3). |
 | F-02-08 | Password reset: request always returns 202; if the email exists and is verified, send a link. Token 1 hour TTL, single use. Completing reset revokes **all** sessions. |
 | F-02-09 | Sessions: opaque ID in cookie `friendfold_session`, Redis key `session:{id}` → `{userId, createdAt, userAgent, ip}`, TTL 30 days, sliding refresh at most once per hour on authenticated requests. |
 | F-02-10 | Cookie flags: `HttpOnly; Secure; SameSite=Lax; Path=/`. `Secure` off only when `COOKIE_SECURE=false` (local HTTP). |
 | F-02-11 | Age gate: date of birth collected at sign-up, must be **13+**. Store `date_of_birth` as `date` (personal data — minimize access). |
 | F-02-12 | Sign-up requires acknowledgement of Privacy Policy and Terms (`terms_accepted_at`). |
-| F-02-13 | Rate limit: register/login/reset per IP and per email hash (see [09](09-safety-basics.md) for the shared limiter; until 09 ships, implement a Redis sliding window in `platform` and use it here). |
+| F-02-13 | Rate limit: register/login/reset/verify/resend per IP and per email hash or user id (see [09](09-safety-basics.md) for the shared limiter; until 09 ships, implement a Redis sliding window in `platform` and use it here). Phase 2: verify 20/15min per IP; resend 3/15min per IP and per user id. |
 
 ## Data model
 
@@ -102,22 +102,26 @@ Used for email verification and password reset.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | `BIGINT PK` | |
-| `user_id` | `BIGINT NOT NULL` | |
-| `purpose` | `TEXT NOT NULL` | `verify_email` \| `reset_password` |
-| `token_hash` | `BYTEA NOT NULL` | SHA-256 of the secret |
-| `expires_at` | `timestamptz NOT NULL` | |
-| `consumed_at` | `timestamptz NULL` | |
+| `user_id` | `BIGINT NOT NULL` | FK `users(id)` ON DELETE CASCADE |
+| `purpose` | `TEXT NOT NULL` | `verify_email` \| `reset_password` (CHECK) |
+| `token_hash` | `BYTEA NOT NULL` | SHA-256 (32 bytes) of the presented secret; never the raw token |
+| `expires_at` | `timestamptz NOT NULL` | verify_email: 24h; reset_password: 1h (phase 3) |
+| `consumed_at` | `timestamptz NULL` | set on use **or** when a newer token of the same purpose is issued |
 | `created_at` | `timestamptz NOT NULL` | |
 
 Indexes:
 
-- `(token_hash)` unique
-- `(user_id, purpose)`
+- unique `(token_hash)` (`auth_tokens_token_hash_key`)
+- unique `(user_id, purpose) WHERE consumed_at IS NULL` (`auth_tokens_unused_purpose_key`) — at most one unused token per purpose per user; serializes concurrent resend
+
+The presented secret is 32 cryptographically random bytes, encoded unpadded base64url (~43 chars) in the email URL. Only the SHA-256 of that exact string is stored. `CHECK (octet_length(token_hash) = 32)`.
 
 Redis:
 
 - `session:{sid}` → JSON, TTL 30d
 - `rate:auth:{action}:{ip}` and `rate:auth:{action}:{emailHash}` → counters
+- `rate:auth:verify:{ip}` — verify-email
+- `rate:auth:resend:{ip}` and `rate:auth:resend:user:{userId}` — resend-verification
 
 ## API endpoints
 
@@ -129,8 +133,8 @@ Redis:
 | `GET` | `/v1/auth/me` | user | Current user: `{ id, email, emailVerified, displayName }`. DOB is not returned. |
 | `GET` | `/v1/auth/google/start` | public | Begin OAuth (phase 4) |
 | `GET` | `/v1/auth/google/callback` | public | Finish OAuth, set cookie, redirect to web (phase 4) |
-| `POST` | `/v1/auth/verify-email` | public | Body: `{ token }` (phase 2) |
-| `POST` | `/v1/auth/resend-verification` | user | Send a new verify email (phase 2) |
+| `POST` | `/v1/auth/verify-email` | public | Body: `{ token }`. 204 on success. Unknown, expired, consumed, and malformed tokens all 400 `invalid_token` (empty token is 400 `validation_error`). |
+| `POST` | `/v1/auth/resend-verification` | user | Invalidate unused `verify_email` tokens, issue a new one, enqueue mail. 204 even if already verified (no-op, no email). |
 | `POST` | `/v1/auth/password/forgot` | public | Always 202 (phase 3) |
 | `POST` | `/v1/auth/password/reset` | public | Body: `{ token, newPassword }` (phase 3) |
 | `POST` | `/v1/auth/password/change` | user | Body: `{ currentPassword?, newPassword }` (phase 3) |
@@ -147,15 +151,16 @@ CSRF: mutating `/v1/auth/*` that rely on cookies require Origin matching `WEB_OR
 | `/login` | Email, password, link to sign up (forgot-password is phase 3; Google is phase 4) |
 | `/forgot-password` | Request reset |
 | `/reset-password?token=` | New password |
-| `/verify-email?token=` | Calls verify API, then redirects |
+| `/verify-email?token=` | Reads `token` from the query, `POST /v1/auth/verify-email`, then redirects home on 204. Missing/invalid token shows an error; already-signed-in users refresh `GET /me` so the banner clears. |
 | `AuthProvider` / layout gate | Redirect anonymous users away from `(main)` once that group exists |
 | Header `Sign in` / `Sign out` | |
+| `UnverifiedEmailBanner` | Shown on the root chrome when `user && !user.emailVerified`: "Check your email" plus resend. |
 
-Unverified banner on the main chrome: "Check your email" with resend.
+Unverified banner on the main chrome: "Check your email" with resend. Unverified users remain allowed in MVP (F-02-07).
 
 ## Non-functional and scaling considerations
 
-- Register p95 < 200 ms excluding SMTP (send mail asynchronously via a goroutine or a later queue; **do not fail sign-up if Mailpit/SES is down** — log and allow resend).
+- Register p95 < 200 ms excluding SMTP (enqueue mail on a bounded worker pool; **do not fail sign-up if Mailpit/SES is down** — log without the token/body and allow resend). Pool size 8; if workers are busy or the process is shutting down, drop the send (resend exists). `cmd/api` waits for in-flight sends on SIGINT/SIGTERM with the HTTP shutdown budget.
 - Redis session store is required. Plan for 100M users × 1.5 sessions ≈ 150M keys; value < 512 bytes; eviction is not acceptable for sessions — size Redis accordingly later. TTL keeps the set to DAU × devices, not all-time users.
 - argon2id is CPU-heavy: run it in a bounded worker pool so a login flood cannot starve the process; pair with rate limits.
 - Sharding key is `users.id`. Email uniqueness becomes a lookup problem after shard — acceptable later with a global email directory service; do not over-design now.
@@ -214,17 +219,50 @@ Decisions / deviations (phase 1):
 
 ### Phase 2 — Email verification
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** split into six stacked PRs (one concern each); merge **after** https://github.com/anhtuta/friendfold/pull/23 (phase 1 frontend, still open). Do not merge #23 to land these. Merge order:
+
+1. docs — this phase-2 breakdown and decisions (this change)
+2. OpenAPI — `POST /v1/auth/verify-email` and `POST /v1/auth/resend-verification`; register description sends mail asynchronously
+3. `auth_tokens` goose migration + sqlc queries
+4. platform SMTP sender + config (Mailpit locally)
+5. auth module — hashed tokens, verify/resend, register enqueues verification mail
+6. frontend — `/verify-email`, unverified banner, resend
 
 Work:
 
-- `auth_tokens`, SMTP sender (Mailpit locally), verify + resend endpoints, `/verify-email` page, unverified banner.
+- `auth_tokens` table (hashed one-time tokens; purpose includes `reset_password` for phase 3 but only `verify_email` is issued here).
+- SMTP sender in `internal/platform/mail` (Mailpit on `:1025` / UI `:8025` in Compose). From-address and host from env; no production credentials in git.
+- `POST /v1/auth/verify-email` (public) and `POST /v1/auth/resend-verification` (session).
+- Register creates the user and session first, then issues a token and enqueues mail. SMTP/queue failure must not undo signup.
+- Frontend `/verify-email?token=` and unverified banner with resend.
 
 Acceptance:
 
-- [ ] Mailpit shows the message; token verifies once; second use 400.
-- [ ] Resend invalidates or coexist with previous tokens (pick one: **invalidate previous unused tokens of the same purpose**).
+- [ ] Mailpit shows the message (or a skippable integration test when Mailpit is not running); token verifies once; second use 400 `invalid_token`.
+- [ ] Resend **invalidates previous unused tokens of the same purpose**; the old link is 400.
+- [ ] Expired token is 400 `invalid_token` (same body as unknown/consumed).
+- [ ] SMTP failure / full queue does not undo signup (201 + session still happen).
+- [ ] Mutating verify/resend require Origin matching `WEB_ORIGIN`; resend requires a session.
+- [ ] Unverified users can still use the product; banner only.
+- [ ] No raw tokens, passwords, or session IDs in logs.
+- [ ] `/verify-email` and the unverified banner are covered by frontend tests and dark-theme screenshots.
+
+Decisions / deviations (phase 2):
+
+- **Token TTL:** 24 hours for `verify_email` (password reset stays 1 hour in phase 3). Hardcoded constant, not env.
+- **Token encoding:** 32 random bytes → unpadded base64url in the link; store SHA-256 of that presented string as `BYTEA` (32 bytes). Lookup hashes the submitted token; empty token is `validation_error` without a lookup.
+- **Consume / resend races:** consume is a single `UPDATE … WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > $now RETURNING`. Resend runs in a transaction: consume unused rows for `(user_id, purpose)`, then insert. The partial unique index `auth_tokens_unused_purpose_key` makes two concurrent resends serialize (second waits, invalidates the first's new row, inserts its own). Verify of the same token: only one UPDATE matches.
+- **Indexes vs the original sketch:** unique `(user_id, purpose)` among unused rows replaces the non-unique `(user_id, purpose)` index. Unique `token_hash` is unchanged.
+- **Already verified:** resend returns 204 and does not issue a token or send mail. Verify of a still-unused unexpired token still consumes it and is 204 (idempotent `email_verified_at`).
+- **HTTP:** both endpoints return **204** on success (no user body; `/me` is the read path). Verify is public (the token is the capability). Resend is cookie-authenticated.
+- **Rate limits** (Redis sliding window, 15 min, fail-open like phase 1): verify-email **20/IP**; resend **3/IP** and **3/user id**. Register/login limits unchanged. Verify is not limited per email (the body has no email).
+- **SMTP config (local defaults, names in `.env.example`):** `SMTP_HOST=127.0.0.1`, `SMTP_PORT=1025`, `SMTP_USERNAME` / `SMTP_PASSWORD` empty (Mailpit has no auth), `SMTP_FROM=Friendfold <friendfold@localhost>`, `SMTP_STARTTLS=false`. Optional `MAILPIT_URL=http://127.0.0.1:8025` for the round-trip test. Production SES/SMTP is later env, not this phase.
+- **Mail workers:** `internal/platform/mail` queue, 8 in-flight sends, 10s per send, drop when saturated or shutting down. Process context (not the HTTP request context) so signup returning does not cancel the send. Shutdown-aware: `cmd/api` closes the queue after HTTP shutdown.
+- **Email link:** `{WEB_ORIGIN}/verify-email?token={token}` (web origin, not the API). Plain text only.
+- **Unverified users remain allowed.** Banner + resend only; posting/password-reset gates wait for later features.
+- **No ADR.** Hashed email tokens in Postgres were already accepted in [0003](../decisions/0003-postgres-redis.md). TTL, rate limits, and SMTP env are recorded here.
+- **Out of scope:** password reset, Google OAuth, requiring verified email to use the product, production mail credentials.
 
 ### Phase 3 — Password reset and change
 
@@ -274,10 +312,11 @@ Acceptance:
 
 ## Testing plan
 
-- Unit: argon2id hash/verify, token hash, session TTL, age gate (12 vs 13).
-- Handler: register validation, login enumeration, CSRF origin reject, reset consumes token.
-- Frontend: signup validation errors, login error, logout.
-- Manual: Mailpit round-trip, Google on a deployed preview if secrets exist (otherwise mock).
+- Unit: argon2id hash/verify, token hash (raw secret not stored), session TTL, age gate (12 vs 13), SMTP client against a loopback listener.
+- Handler: register validation, login enumeration, CSRF origin reject, verify once then 400, expiry, resend invalidates previous unused token, SMTP/queue failure does not undo signup, resend without session 401, verify/resend origin reject, resend rate limit.
+- Frontend: signup validation errors, login error, logout, verify-email missing/invalid/success, unverified banner resend.
+- Mailpit: optional round-trip (`MAILPIT_URL` / SMTP `:1025`); skip when unreachable. Manual: Compose Mailpit UI on `:8025`.
+- Google on a deployed preview if secrets exist (otherwise mock) — phase 4.
 
 ## Open questions
 
