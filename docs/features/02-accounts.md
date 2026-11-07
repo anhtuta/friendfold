@@ -222,12 +222,12 @@ Decisions / deviations (phase 1):
 **Status:** In progress  
 **PR:** split into six stacked PRs (one concern each); merge **after** https://github.com/anhtuta/friendfold/pull/23 (phase 1 frontend, still open). Do not merge #23 to land these. Merge order:
 
-1. docs — this phase-2 breakdown and decisions (this change)
-2. OpenAPI — `POST /v1/auth/verify-email` and `POST /v1/auth/resend-verification`; register description sends mail asynchronously
-3. `auth_tokens` goose migration + sqlc queries
-4. platform SMTP sender + config (Mailpit locally)
-5. auth module — hashed tokens, verify/resend, register enqueues verification mail
-6. frontend — `/verify-email`, unverified banner, resend
+1. https://github.com/anhtuta/friendfold/pull/26 — docs (phase-2 breakdown and decisions)
+2. https://github.com/anhtuta/friendfold/pull/27 — OpenAPI `POST /v1/auth/verify-email` and `POST /v1/auth/resend-verification`
+3. https://github.com/anhtuta/friendfold/pull/28 — `auth_tokens` goose migration + sqlc
+4. https://github.com/anhtuta/friendfold/pull/29 — platform SMTP sender + Mailpit config
+5. https://github.com/anhtuta/friendfold/pull/30 — auth module: hashed tokens, verify/resend, register enqueues mail
+6. frontend `/verify-email`, unverified banner, resend (this PR; URL filled when opened)
 
 Work:
 
@@ -239,14 +239,14 @@ Work:
 
 Acceptance:
 
-- [ ] Mailpit shows the message (or a skippable integration test when Mailpit is not running); token verifies once; second use 400 `invalid_token`.
-- [ ] Resend **invalidates previous unused tokens of the same purpose**; the old link is 400.
-- [ ] Expired token is 400 `invalid_token` (same body as unknown/consumed).
-- [ ] SMTP failure / full queue does not undo signup (201 + session still happen).
-- [ ] Mutating verify/resend require Origin matching `WEB_ORIGIN`; resend requires a session.
-- [ ] Unverified users can still use the product; banner only.
-- [ ] No raw tokens, passwords, or session IDs in logs.
-- [ ] `/verify-email` and the unverified banner are covered by frontend tests and dark-theme screenshots.
+- [x] Mailpit round-trip is implemented and **skipped** when SMTP `:1025` is unreachable (this environment had no Docker/Mailpit). Token verifies once; second use 400 `invalid_token`.
+- [x] Resend **invalidates previous unused tokens of the same purpose**; the old link is 400.
+- [x] Expired token is 400 `invalid_token` (same body as unknown/consumed).
+- [x] SMTP failure / full queue does not undo signup (201 + session still happen).
+- [x] Mutating verify/resend require Origin matching `WEB_ORIGIN`; resend requires a session.
+- [x] Unverified users can still use the product; banner only.
+- [x] No raw tokens, passwords, or session IDs in logs (queue tests assert body/recipient are absent).
+- [x] `/verify-email` and the unverified banner are covered by frontend tests and dark-theme screenshots.
 
 Decisions / deviations (phase 2):
 
