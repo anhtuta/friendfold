@@ -28,7 +28,7 @@ tags:
   - name: platform
     description: Process liveness and dependency readiness. No product data.
   - name: auth
-    description: Email/password accounts, email verification, and server-side sessions.
+    description: Email/password accounts, email verification, password reset, and server-side sessions.
 security: []
 paths:
   /v1/health:
@@ -315,6 +315,135 @@ paths:
           $ref: "#/components/responses/OriginMismatch"
         "429":
           $ref: "#/components/responses/RateLimited"
+  /v1/auth/password/forgot:
+    post:
+      operationId: forgotPassword
+      tags:
+        - auth
+      summary: Request a password reset email
+      description: |
+        Always returns 202 for a well-formed email so callers cannot tell
+        whether the address exists or is verified. A reset mail is enqueued
+        **only** when a live user exists and `email_verified_at` is set.
+
+        Issues a single-use `reset_password` token (1 hour TTL, SHA-256
+        stored). A new request invalidates unused tokens of that purpose.
+        SMTP/queue failure is logged and still returns 202.
+
+        Rate limited per IP and per email hash. Origin must match `WEB_ORIGIN`.
+        Unknown JSON fields are rejected.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+            examples:
+              email:
+                value:
+                  email: minh@example.com
+      responses:
+        "202":
+          description: Accepted (mail may or may not have been enqueued)
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/auth/password/reset:
+    post:
+      operationId: resetPassword
+      tags:
+        - auth
+      summary: Set a new password with a reset token
+      description: |
+        Consumes a single-use `reset_password` token, writes a new argon2id
+        hash, and revokes **all** sessions for that user. Public: the token
+        is the capability. No session cookie is set; the user signs in
+        afterward.
+
+        Unknown, expired, consumed, malformed, and wrong-purpose tokens all
+        return 400 `invalid_token` with the same body. An empty token is 400
+        `validation_error`. Success is 204.
+
+        Rate limited per IP. Origin must match `WEB_ORIGIN`. Unknown JSON
+        fields are rejected.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+            examples:
+              reset:
+                value:
+                  token: example-reset-token
+                  newPassword: correct-horse-battery-2
+      responses:
+        "204":
+          description: Password updated; all sessions revoked
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+        "400":
+          $ref: "#/components/responses/ResetPasswordError"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/auth/password/change:
+    post:
+      operationId: changePassword
+      tags:
+        - auth
+      summary: Change or add a password while signed in
+      description: |
+        Requires a session. When `password_hash` is set, `currentPassword` is
+        required and must match (wrong → 401 `invalid_credentials`). When
+        `password_hash` is NULL (Google-only account, phase 4), omit
+        `currentPassword` to add a password.
+
+        On success, every existing session is revoked and a new session
+        cookie is set for this device (204). Other devices must sign in
+        again.
+
+        Rate limited per IP and per user id. Origin must match `WEB_ORIGIN`.
+        Unknown JSON fields are rejected.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+            examples:
+              change:
+                value:
+                  currentPassword: correct-horse-battery
+                  newPassword: correct-horse-battery-2
+      responses:
+        "204":
+          description: Password updated; this device given a new session
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Set-Cookie:
+              $ref: "#/components/headers/SetSessionCookie"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/ChangePasswordUnauthorized"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "429":
+          $ref: "#/components/responses/RateLimited"
 components:
   securitySchemes:
     cookieAuth:
@@ -415,6 +544,28 @@ components:
                 error:
                   code: invalid_credentials
                   message: Email or password is incorrect
+    ChangePasswordUnauthorized:
+      description: |
+        Missing session (`unauthenticated`) or wrong `currentPassword`
+        (`invalid_credentials`). Both are 401.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            unauthenticated:
+              value:
+                error:
+                  code: unauthenticated
+                  message: Authentication required
+            invalid:
+              value:
+                error:
+                  code: invalid_credentials
+                  message: Email or password is incorrect
     Unauthenticated:
       description: Missing or invalid session
       headers:
@@ -477,6 +628,29 @@ components:
                 error:
                   code: invalid_token
                   message: This verification link is invalid or has expired
+            empty:
+              value:
+                error:
+                  code: validation_error
+                  message: token is required
+    ResetPasswordError:
+      description: |
+        Reset failed. `error.code` is `invalid_token` (unknown, expired,
+        consumed, malformed, or wrong purpose) or `validation_error` (empty
+        token, bad password, or bad JSON).
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            invalid:
+              value:
+                error:
+                  code: invalid_token
+                  message: This reset link is invalid or has expired
             empty:
               value:
                 error:
@@ -635,3 +809,51 @@ components:
           description: |
             Unpadded base64url of 32 random bytes (~43 chars). Presented once
             in the email link; the API stores only SHA-256 of this string.
+    ForgotPasswordRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+    ResetPasswordRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - token
+        - newPassword
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: |
+            Unpadded base64url of 32 random bytes (~43 chars). Presented once
+            in the email link; the API stores only SHA-256 of this string.
+            Example values in this spec are `example-reset-token`, not secrets.
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: 8–72 bytes; must not equal the account email.
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - newPassword
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 72
+          description: |
+            Required when the account already has a password. Omit when adding
+            a password to a Google-only account (`password_hash` is NULL).
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: 8–72 bytes; must not equal the account email.
