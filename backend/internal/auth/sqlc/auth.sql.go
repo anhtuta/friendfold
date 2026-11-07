@@ -15,6 +15,7 @@ const consumeAuthToken = `-- name: ConsumeAuthToken :one
 UPDATE auth_tokens
 SET consumed_at = $2
 WHERE token_hash = $1
+  AND purpose = $3
   AND consumed_at IS NULL
   AND expires_at > $2
 RETURNING id, user_id, purpose, token_hash, expires_at, consumed_at, created_at
@@ -23,10 +24,11 @@ RETURNING id, user_id, purpose, token_hash, expires_at, consumed_at, created_at
 type ConsumeAuthTokenParams struct {
 	TokenHash  []byte
 	ConsumedAt pgtype.Timestamptz
+	Purpose    string
 }
 
 func (q *Queries) ConsumeAuthToken(ctx context.Context, arg ConsumeAuthTokenParams) (AuthToken, error) {
-	row := q.db.QueryRow(ctx, consumeAuthToken, arg.TokenHash, arg.ConsumedAt)
+	row := q.db.QueryRow(ctx, consumeAuthToken, arg.TokenHash, arg.ConsumedAt, arg.Purpose)
 	var i AuthToken
 	err := row.Scan(
 		&i.ID,

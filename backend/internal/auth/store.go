@@ -13,20 +13,23 @@ import (
 	"github.com/anhtuta/friendfold/backend/internal/auth/sqlc"
 )
 
-type userRepo interface {
+type accountRepo interface {
 	Insert(ctx context.Context, u User) error
 	ByEmail(ctx context.Context, email string) (User, error)
 	ByID(ctx context.Context, id int64) (User, error)
+	IssueToken(ctx context.Context, tok AuthToken) error
+	ConsumeVerifyToken(ctx context.Context, hash []byte, now time.Time) (userID int64, err error)
 }
 
-// Store is the Postgres implementation of userRepo (sqlc).
+// Store is the Postgres implementation of accountRepo (sqlc).
 type Store struct {
-	q *sqlc.Queries
+	db sqlc.DBTX
+	q  *sqlc.Queries
 }
 
 // NewStore wraps a pgx pool or tx.
 func NewStore(db sqlc.DBTX) *Store {
-	return &Store{q: sqlc.New(db)}
+	return &Store{db: db, q: sqlc.New(db)}
 }
 
 // Insert writes a new user. Duplicate live email becomes ErrEmailTaken.
@@ -73,6 +76,82 @@ func mapNotFound(err error, op string) error {
 		return ErrNotFound
 	}
 	return fmt.Errorf("%s: %w", op, err)
+}
+
+// IssueToken invalidates unused tokens of the same purpose, then inserts tok.
+func (s *Store) IssueToken(ctx context.Context, tok AuthToken) error {
+	return s.inTx(ctx, func(q *sqlc.Queries) error {
+		if err := q.InvalidateUnusedAuthTokens(ctx, sqlc.InvalidateUnusedAuthTokensParams{
+			UserID:     tok.UserID,
+			Purpose:    tok.Purpose,
+			ConsumedAt: pgTime(tok.CreatedAt),
+		}); err != nil {
+			return fmt.Errorf("auth invalidate tokens: %w", err)
+		}
+		_, err := q.InsertAuthToken(ctx, sqlc.InsertAuthTokenParams{
+			ID:        tok.ID,
+			UserID:    tok.UserID,
+			Purpose:   tok.Purpose,
+			TokenHash: tok.Hash,
+			ExpiresAt: pgTime(tok.ExpiresAt),
+			CreatedAt: pgTime(tok.CreatedAt),
+		})
+		if err != nil {
+			return fmt.Errorf("auth insert token: %w", err)
+		}
+		return nil
+	})
+}
+
+// ConsumeVerifyToken marks a verify_email token used and sets email_verified_at.
+func (s *Store) ConsumeVerifyToken(ctx context.Context, hash []byte, now time.Time) (int64, error) {
+	var userID int64
+	err := s.inTx(ctx, func(q *sqlc.Queries) error {
+		row, err := q.ConsumeAuthToken(ctx, sqlc.ConsumeAuthTokenParams{
+			TokenHash:  hash,
+			ConsumedAt: pgTime(now),
+			Purpose:    PurposeVerifyEmail,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrInvalidToken
+			}
+			return fmt.Errorf("auth consume token: %w", err)
+		}
+		if _, err := q.MarkEmailVerified(ctx, sqlc.MarkEmailVerifiedParams{
+			ID:              row.UserID,
+			EmailVerifiedAt: pgTime(now),
+		}); err != nil {
+			return fmt.Errorf("auth mark verified: %w", err)
+		}
+		userID = row.UserID
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return userID, nil
+}
+
+func (s *Store) inTx(ctx context.Context, fn func(*sqlc.Queries) error) error {
+	beginner, ok := s.db.(interface {
+		Begin(context.Context) (pgx.Tx, error)
+	})
+	if !ok {
+		return fn(s.q)
+	}
+	tx, err := beginner.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("auth begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := fn(sqlc.New(tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("auth commit: %w", err)
+	}
+	return nil
 }
 
 func userFromRow(row sqlc.User) User {

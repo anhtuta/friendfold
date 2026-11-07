@@ -1,14 +1,26 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"sync"
+	"time"
 )
+
+type memToken struct {
+	ID        int64
+	UserID    int64
+	Purpose   string
+	Hash      []byte
+	ExpiresAt time.Time
+	Consumed  *time.Time
+}
 
 type memStore struct {
 	mu      sync.Mutex
 	byID    map[int64]User
 	byEmail map[string]User
+	tokens  []memToken
 }
 
 func newMemStore() *memStore {
@@ -48,4 +60,61 @@ func (m *memStore) ByID(_ context.Context, id int64) (User, error) {
 		return User{}, ErrNotFound
 	}
 	return u, nil
+}
+
+func (m *memStore) IssueToken(_ context.Context, tok AuthToken) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := tok.CreatedAt
+	for i := range m.tokens {
+		t := &m.tokens[i]
+		if t.UserID == tok.UserID && t.Purpose == tok.Purpose && t.Consumed == nil {
+			c := now
+			t.Consumed = &c
+		}
+	}
+	m.tokens = append(m.tokens, memToken{
+		ID:        tok.ID,
+		UserID:    tok.UserID,
+		Purpose:   tok.Purpose,
+		Hash:      append([]byte(nil), tok.Hash...),
+		ExpiresAt: tok.ExpiresAt,
+	})
+	return nil
+}
+
+func (m *memStore) ConsumeVerifyToken(_ context.Context, hash []byte, now time.Time) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := range m.tokens {
+		t := &m.tokens[i]
+		if !bytes.Equal(t.Hash, hash) || t.Purpose != PurposeVerifyEmail || t.Consumed != nil {
+			continue
+		}
+		if !t.ExpiresAt.After(now) {
+			continue
+		}
+		c := now
+		t.Consumed = &c
+		u, ok := m.byID[t.UserID]
+		if ok {
+			u.EmailVerified = true
+			m.byID[u.ID] = u
+			m.byEmail[u.Email] = u
+		}
+		return t.UserID, nil
+	}
+	return 0, ErrInvalidToken
+}
+
+func (m *memStore) unusedCount(userID int64, purpose string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, t := range m.tokens {
+		if t.UserID == userID && t.Purpose == purpose && t.Consumed == nil {
+			n++
+		}
+	}
+	return n
 }

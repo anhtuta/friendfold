@@ -48,6 +48,7 @@ RETURNING id, user_id, purpose, token_hash, expires_at, consumed_at, created_at;
 UPDATE auth_tokens
 SET consumed_at = $2
 WHERE token_hash = $1
+  AND purpose = $3
   AND consumed_at IS NULL
   AND expires_at > $2
 RETURNING id, user_id, purpose, token_hash, expires_at, consumed_at, created_at;

@@ -15,6 +15,7 @@ var (
 	ErrUnauthenticated    = errors.New("auth: unauthenticated")
 	ErrRateLimited        = errors.New("auth: rate limited")
 	ErrNotFound           = errors.New("auth: not found")
+	ErrInvalidToken       = errors.New("auth: invalid token")
 )
 
 // ValidationError is a 400 validation_error with a public message.
@@ -70,4 +71,14 @@ type LoginInput struct {
 type SessionUser struct {
 	User      User
 	SessionID string
+}
+
+// AuthToken is a hashed one-time secret. The raw secret is never stored.
+type AuthToken struct {
+	ID        int64
+	UserID    int64
+	Purpose   string
+	Hash      []byte
+	ExpiresAt time.Time
+	CreatedAt time.Time
 }
