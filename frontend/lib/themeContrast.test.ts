@@ -45,7 +45,13 @@ describe("dark theme tokens", () => {
 
   it("meets WCAG 2.2 AA contrast for text on the page background", () => {
     const background = themeColor(css, "background");
-    for (const name of ["foreground", "muted", "subtle", "accent"] as const) {
+    for (const name of [
+      "foreground",
+      "muted",
+      "subtle",
+      "accent",
+      "danger",
+    ] as const) {
       expect(
         contrastRatio(background, themeColor(css, name)),
         `${name} on background`,
