@@ -15,6 +15,12 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("REDIS_URL", "")
 	t.Setenv("PGX_MAX_CONNS", "")
 	t.Setenv("COOKIE_SECURE", "")
+	t.Setenv("SMTP_HOST", "")
+	t.Setenv("SMTP_PORT", "")
+	t.Setenv("SMTP_USERNAME", "")
+	t.Setenv("SMTP_PASSWORD", "")
+	t.Setenv("SMTP_FROM", "")
+	t.Setenv("SMTP_STARTTLS", "")
 	// Empty values fall back to defaults. Clearing avoids leakage from the
 	// process environment.
 
@@ -49,6 +55,21 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.CookieSecure {
 		t.Error("CookieSecure = true, want false when WEB_ORIGIN is http")
 	}
+	if cfg.SMTPHost != defaultSMTPHost {
+		t.Errorf("SMTPHost = %q, want %q", cfg.SMTPHost, defaultSMTPHost)
+	}
+	if cfg.SMTPPort != defaultSMTPPort {
+		t.Errorf("SMTPPort = %d, want %d", cfg.SMTPPort, defaultSMTPPort)
+	}
+	if cfg.SMTPFrom != defaultSMTPFrom {
+		t.Errorf("SMTPFrom = %q, want %q", cfg.SMTPFrom, defaultSMTPFrom)
+	}
+	if cfg.SMTPStartTLS {
+		t.Error("SMTPStartTLS = true, want false")
+	}
+	if cfg.SMTPUsername != "" || cfg.SMTPPassword != "" {
+		t.Error("SMTP auth should be empty by default")
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -61,6 +82,12 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("REDIS_URL", "redis://127.0.0.1:6380/1")
 	t.Setenv("PGX_MAX_CONNS", "8")
 	t.Setenv("COOKIE_SECURE", "true")
+	t.Setenv("SMTP_HOST", "127.0.0.1")
+	t.Setenv("SMTP_PORT", "1025")
+	t.Setenv("SMTP_FROM", "Friendfold <dev@localhost>")
+	t.Setenv("SMTP_STARTTLS", "false")
+	t.Setenv("SMTP_USERNAME", "")
+	t.Setenv("SMTP_PASSWORD", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -92,6 +119,15 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if !cfg.CookieSecure {
 		t.Error("CookieSecure = false, want true from COOKIE_SECURE")
+	}
+	if cfg.SMTPHost != "127.0.0.1" || cfg.SMTPPort != 1025 {
+		t.Errorf("SMTP = %s:%d", cfg.SMTPHost, cfg.SMTPPort)
+	}
+	if cfg.SMTPFrom != "Friendfold <dev@localhost>" {
+		t.Errorf("SMTPFrom = %q", cfg.SMTPFrom)
+	}
+	if cfg.SMTPStartTLS {
+		t.Error("SMTPStartTLS = true, want false")
 	}
 }
 
@@ -149,6 +185,28 @@ func TestLoadAcceptsWorkerIDZero(t *testing.T) {
 	}
 	if cfg.SnowflakeWorkerID != 0 {
 		t.Errorf("SnowflakeWorkerID = %d, want 0", cfg.SnowflakeWorkerID)
+	}
+}
+
+func TestLoadRejectsSMTPPortOutOfRange(t *testing.T) {
+	t.Setenv("SMTP_PORT", "0")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error for SMTP_PORT 0")
+	}
+	t.Setenv("SMTP_PORT", "65536")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error for SMTP_PORT 65536")
+	}
+}
+
+func TestLoadSMTPStartTLS(t *testing.T) {
+	t.Setenv("SMTP_STARTTLS", "true")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.SMTPStartTLS {
+		t.Error("SMTPStartTLS = false, want true")
 	}
 }
 
