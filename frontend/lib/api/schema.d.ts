@@ -65,8 +65,10 @@ export interface paths {
          *     Date of birth must be 13+ (UTC calendar date). `termsAccepted` must be
          *     true. Email is stored lowercased; a live (non-deleted) email is unique.
          *
-         *     Phase 1 does not send a verification email (that is phase 2). The
-         *     account can use the product with `emailVerified: false`.
+         *     After the user and session are committed, a verification email is
+         *     enqueued (24h single-use token). SMTP or queue failure is logged and
+         *     does **not** fail registration; the user can resend. The account can
+         *     use the product with `emailVerified: false`.
          *
          *     Unknown JSON fields are rejected. Rate limited per IP and per email hash.
          */
@@ -144,6 +146,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify email with a one-time token
+         * @description Consumes a single-use `verify_email` token issued at registration or
+         *     resend and sets `email_verified_at`. Public: the token is the
+         *     capability. Session cookie is not required.
+         *
+         *     Unknown, expired, consumed, and malformed tokens all return 400
+         *     `invalid_token` with the same body. An empty token is 400
+         *     `validation_error`. Success is 204; the client should call
+         *     `GET /v1/auth/me` when signed in.
+         *
+         *     Rate limited per IP. Origin must match `WEB_ORIGIN`. Unknown JSON
+         *     fields are rejected.
+         */
+        post: operations["verifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/resend-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a new verification email
+         * @description Requires a session. Invalidates unused `verify_email` tokens for the
+         *     current user, issues a new 24h token, and enqueues mail. If the email
+         *     is already verified, returns 204 without sending.
+         *
+         *     SMTP failure is logged and still returns 204 (the user can try again).
+         *     Rate limited per IP and per user id. Origin must match `WEB_ORIGIN`.
+         *     No request body.
+         */
+        post: operations["resendVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -180,7 +238,7 @@ export interface components {
             id: components["schemas"]["SnowflakeId"];
             /** Format: email */
             email: string;
-            /** @description Always false until feature 02 phase 2 (email verification). */
+            /** @description True after a valid `verify_email` token is consumed. */
             emailVerified: boolean;
             displayName: string;
         };
@@ -202,6 +260,13 @@ export interface components {
             /** Format: email */
             email: string;
             password: string;
+        };
+        VerifyEmailRequest: {
+            /**
+             * @description Unpadded base64url of 32 random bytes (~43 chars). Presented once
+             *     in the email link; the API stores only SHA-256 of this string.
+             */
+            token: string;
         };
     };
     responses: {
@@ -270,6 +335,19 @@ export interface components {
         };
         /** @description Email already registered */
         EmailTaken: {
+            headers: {
+                "X-Request-Id": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description Verify failed. `error.code` is `invalid_token` (unknown, expired,
+         *     consumed, or malformed) or `validation_error` (empty token or bad JSON).
+         */
+        VerifyEmailError: {
             headers: {
                 "X-Request-Id": components["headers"]["RequestId"];
                 [name: string]: unknown;
@@ -462,6 +540,54 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+        };
+    };
+    verifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Email verified (or already verified); token consumed */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["VerifyEmailError"];
+            403: components["responses"]["OriginMismatch"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    resendVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted (mail enqueued, already verified, or send skipped) */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["OriginMismatch"];
+            429: components["responses"]["RateLimited"];
         };
     };
 }
