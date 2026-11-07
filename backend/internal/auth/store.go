@@ -19,6 +19,9 @@ type accountRepo interface {
 	ByID(ctx context.Context, id int64) (User, error)
 	IssueToken(ctx context.Context, tok AuthToken) error
 	ConsumeVerifyToken(ctx context.Context, hash []byte, now time.Time) (userID int64, err error)
+	LiveResetUser(ctx context.Context, hash []byte, now time.Time) (User, error)
+	ConsumeResetAndSetPassword(ctx context.Context, hash []byte, passwordHash string, now time.Time) (userID int64, err error)
+	UpdatePasswordHash(ctx context.Context, userID int64, passwordHash string, now time.Time) error
 }
 
 // Store is the Postgres implementation of accountRepo (sqlc).
@@ -131,6 +134,74 @@ func (s *Store) ConsumeVerifyToken(ctx context.Context, hash []byte, now time.Ti
 		return 0, err
 	}
 	return userID, nil
+}
+
+// LiveResetUser returns the user for an unused, unexpired reset_password token
+// without consuming it.
+func (s *Store) LiveResetUser(ctx context.Context, hash []byte, now time.Time) (User, error) {
+	row, err := s.q.GetLiveAuthToken(ctx, sqlc.GetLiveAuthTokenParams{
+		TokenHash: hash,
+		Purpose:   PurposeResetPassword,
+		ExpiresAt: pgTime(now),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return User{}, ErrInvalidResetToken
+		}
+		return User{}, fmt.Errorf("auth live reset token: %w", err)
+	}
+	u, err := s.ByID(ctx, row.UserID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return User{}, ErrInvalidResetToken
+		}
+		return User{}, err
+	}
+	return u, nil
+}
+
+// ConsumeResetAndSetPassword consumes a reset_password token and writes the
+// new hash in one transaction.
+func (s *Store) ConsumeResetAndSetPassword(ctx context.Context, hash []byte, passwordHash string, now time.Time) (int64, error) {
+	var userID int64
+	err := s.inTx(ctx, func(q *sqlc.Queries) error {
+		row, err := q.ConsumeAuthToken(ctx, sqlc.ConsumeAuthTokenParams{
+			TokenHash:  hash,
+			ConsumedAt: pgTime(now),
+			Purpose:    PurposeResetPassword,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrInvalidResetToken
+			}
+			return fmt.Errorf("auth consume reset token: %w", err)
+		}
+		if err := q.UpdatePasswordHash(ctx, sqlc.UpdatePasswordHashParams{
+			ID:           row.UserID,
+			PasswordHash: pgtype.Text{String: passwordHash, Valid: passwordHash != ""},
+			UpdatedAt:    pgTime(now),
+		}); err != nil {
+			return fmt.Errorf("auth update password: %w", err)
+		}
+		userID = row.UserID
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return userID, nil
+}
+
+// UpdatePasswordHash writes a new argon2id hash for a live user.
+func (s *Store) UpdatePasswordHash(ctx context.Context, userID int64, passwordHash string, now time.Time) error {
+	if err := s.q.UpdatePasswordHash(ctx, sqlc.UpdatePasswordHashParams{
+		ID:           userID,
+		PasswordHash: pgtype.Text{String: passwordHash, Valid: passwordHash != ""},
+		UpdatedAt:    pgTime(now),
+	}); err != nil {
+		return fmt.Errorf("auth update password: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) inTx(ctx context.Context, fn func(*sqlc.Queries) error) error {

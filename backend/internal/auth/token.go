@@ -10,10 +10,12 @@ import (
 )
 
 const (
-	PurposeVerifyEmail = "verify_email"
-	tokenRawBytes      = 32
-	maxTokenChars      = 128
-	verifyTTL          = 24 * time.Hour
+	PurposeVerifyEmail   = "verify_email"
+	PurposeResetPassword = "reset_password"
+	tokenRawBytes        = 32
+	maxTokenChars        = 128
+	verifyTTL            = 24 * time.Hour
+	resetTTL             = time.Hour
 )
 
 // NewVerifyToken returns a raw URL token and its SHA-256 hash. Only the hash

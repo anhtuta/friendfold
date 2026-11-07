@@ -16,6 +16,7 @@ var (
 	ErrRateLimited        = errors.New("auth: rate limited")
 	ErrNotFound           = errors.New("auth: not found")
 	ErrInvalidToken       = errors.New("auth: invalid token")
+	ErrInvalidResetToken  = fmt.Errorf("auth: invalid reset token: %w", ErrInvalidToken)
 )
 
 // ValidationError is a 400 validation_error with a public message.

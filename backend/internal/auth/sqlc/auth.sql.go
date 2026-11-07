@@ -42,6 +42,36 @@ func (q *Queries) ConsumeAuthToken(ctx context.Context, arg ConsumeAuthTokenPara
 	return i, err
 }
 
+const getLiveAuthToken = `-- name: GetLiveAuthToken :one
+SELECT id, user_id, purpose, token_hash, expires_at, consumed_at, created_at
+FROM auth_tokens
+WHERE token_hash = $1
+  AND purpose = $2
+  AND consumed_at IS NULL
+  AND expires_at > $3
+`
+
+type GetLiveAuthTokenParams struct {
+	TokenHash []byte
+	Purpose   string
+	ExpiresAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetLiveAuthToken(ctx context.Context, arg GetLiveAuthTokenParams) (AuthToken, error) {
+	row := q.db.QueryRow(ctx, getLiveAuthToken, arg.TokenHash, arg.Purpose, arg.ExpiresAt)
+	var i AuthToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Purpose,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, email_verified_at, password_hash, display_name, date_of_birth, terms_accepted_at, created_at, updated_at, deleted_at
 FROM users
@@ -226,4 +256,21 @@ func (q *Queries) MarkEmailVerified(ctx context.Context, arg MarkEmailVerifiedPa
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const updatePasswordHash = `-- name: UpdatePasswordHash :exec
+UPDATE users
+SET password_hash = $2, updated_at = $3
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+type UpdatePasswordHashParams struct {
+	ID           int64
+	PasswordHash pgtype.Text
+	UpdatedAt    pgtype.Timestamptz
+}
+
+func (q *Queries) UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error {
+	_, err := q.db.Exec(ctx, updatePasswordHash, arg.ID, arg.PasswordHash, arg.UpdatedAt)
+	return err
 }
