@@ -48,3 +48,22 @@ export const healthUnavailable = "API is not ready";
 export const healthUnreachable = "API unreachable";
 
 export const homeNavLabel = "Home";
+
+export const verifyEmailHeading = "Verify your email";
+
+export const verifyEmailWorking = "Verifying your email…";
+
+export const verifyEmailSuccess = "Your email is verified.";
+
+export const verifyEmailMissingToken =
+  "This verification link is missing a token. Request a new email from Friendfold.";
+
+export const verifyEmailInvalid =
+  "This verification link is invalid or has expired.";
+
+export const unverifiedBannerMessage =
+  "Check your email to verify your account.";
+
+export const resendVerificationLabel = "Resend verification email";
+
+export const resendVerificationSent = "We sent a new verification email.";
