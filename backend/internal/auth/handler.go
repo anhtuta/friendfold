@@ -33,10 +33,12 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Use(httpx.RequireOrigin(h.webOrigin))
 		r.Post("/register", h.register)
 		r.Post("/login", h.login)
+		r.Post("/verify-email", h.verifyEmail)
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireSession)
 			r.Get("/me", h.me)
 			r.Post("/logout", h.logout)
+			r.Post("/resend-verification", h.resendVerification)
 		})
 	})
 }
@@ -52,6 +54,10 @@ type registerBody struct {
 type loginBody struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type verifyEmailBody struct {
+	Token string `json:"token"`
 }
 
 type userBody struct {
@@ -114,6 +120,32 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 	writeUser(w, http.StatusOK, u)
 }
 
+func (h *Handler) verifyEmail(w http.ResponseWriter, r *http.Request) {
+	var body verifyEmailBody
+	if err := httpx.DecodeJSON(w, r, &body); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "validation_error", "Request is invalid")
+		return
+	}
+	if err := h.svc.VerifyEmail(r.Context(), body.Token, httpx.ClientIP(r)); err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) resendVerification(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie(httpx.SessionCookieName)
+	if err != nil || c.Value == "" {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthenticated", "Authentication required")
+		return
+	}
+	if err := h.svc.ResendVerification(r.Context(), c.Value, httpx.ClientIP(r)); err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie(httpx.SessionCookieName)
 	if err == nil {
@@ -161,6 +193,8 @@ func (h *Handler) writeErr(w http.ResponseWriter, err error) {
 		httpx.WriteError(w, http.StatusBadRequest, "underage", "You must be at least 13 years old")
 	case errors.Is(err, ErrEmailTaken):
 		httpx.WriteError(w, http.StatusConflict, "email_taken", "Email is already registered")
+	case errors.Is(err, ErrInvalidToken):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_token", "This verification link is invalid or has expired")
 	case errors.Is(err, ErrInvalidCredentials):
 		httpx.WriteError(w, http.StatusUnauthorized, "invalid_credentials", "Email or password is incorrect")
 	case errors.Is(err, ErrUnauthenticated), errors.Is(err, session.ErrNotFound):

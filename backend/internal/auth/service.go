@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/anhtuta/friendfold/backend/internal/platform/id"
+	"github.com/anhtuta/friendfold/backend/internal/platform/mail"
 	"github.com/anhtuta/friendfold/backend/internal/platform/ratelimit"
 	"github.com/anhtuta/friendfold/backend/internal/platform/session"
 )
@@ -22,6 +24,8 @@ const (
 	registerIPLimit  = 5
 	registerEmailLim = 3
 	loginLimit       = 10
+	verifyIPLimit    = 20
+	resendLimit      = 3
 	authWindow       = 15 * time.Minute
 )
 
@@ -39,30 +43,38 @@ type ids interface {
 	Next(ctx context.Context) (int64, error)
 }
 
-// Service is the accounts use-case layer.
-type Service struct {
-	users    userRepo
-	sessions sessions
-	hasher   *Hasher
-	ids      ids
-	limiter  limiter
-	logger   *slog.Logger
-	now      func() time.Time
+type mailQueue interface {
+	Enqueue(msg mail.Message)
 }
 
-// NewService wires dependencies. logger may be nil.
-func NewService(users userRepo, sessions sessions, hasher *Hasher, ids ids, limiter limiter, logger *slog.Logger) *Service {
+// Service is the accounts use-case layer.
+type Service struct {
+	users     accountRepo
+	sessions  sessions
+	hasher    *Hasher
+	ids       ids
+	limiter   limiter
+	mail      mailQueue
+	webOrigin string
+	logger    *slog.Logger
+	now       func() time.Time
+}
+
+// NewService wires dependencies. logger and mail may be nil.
+func NewService(users accountRepo, sessions sessions, hasher *Hasher, ids ids, limiter limiter, mailer mailQueue, webOrigin string, logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &Service{
-		users:    users,
-		sessions: sessions,
-		hasher:   hasher,
-		ids:      ids,
-		limiter:  limiter,
-		logger:   logger,
-		now:      time.Now,
+		users:     users,
+		sessions:  sessions,
+		hasher:    hasher,
+		ids:       ids,
+		limiter:   limiter,
+		mail:      mailer,
+		webOrigin: webOrigin,
+		logger:    logger,
+		now:       time.Now,
 	}
 }
 
@@ -113,6 +125,9 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (SessionUser, 
 	sid, err := s.startSession(ctx, u.ID, in.UserAgent, in.IP)
 	if err != nil {
 		return SessionUser{}, err
+	}
+	if err := s.issueAndEnqueueVerify(ctx, u); err != nil {
+		s.logger.Error("auth verify email enqueue", slog.String("error", err.Error()), slog.Int64("user_id", u.ID))
 	}
 	u.PasswordHash = ""
 	return SessionUser{User: u, SessionID: sid}, nil
@@ -185,6 +200,82 @@ func (s *Service) Me(ctx context.Context, sessionID string) (User, error) {
 	return u, nil
 }
 
+// VerifyEmail consumes a one-time token and marks the user verified.
+func (s *Service) VerifyEmail(ctx context.Context, token, ip string) error {
+	if err := s.hitLimit(ctx, "verify", ip, "", verifyIPLimit, 0); err != nil {
+		return err
+	}
+	hash, err := HashToken(token)
+	if err != nil {
+		return err
+	}
+	if _, err := s.users.ConsumeVerifyToken(ctx, hash, s.now().UTC()); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ResendVerification issues a new token and enqueues mail. Already-verified
+// users get a no-op success. Token persistence errors fail the request; SMTP
+// errors are logged inside the mail queue and still succeed.
+func (s *Service) ResendVerification(ctx context.Context, sessionID, ip string) error {
+	u, err := s.Me(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if err := s.hitLimitUser(ctx, "resend", ip, u.ID, resendLimit); err != nil {
+		return err
+	}
+	if u.EmailVerified {
+		return nil
+	}
+	return s.issueAndEnqueueVerify(ctx, u)
+}
+
+func (s *Service) issueAndEnqueueVerify(ctx context.Context, u User) error {
+	raw, hash, err := NewVerifyToken()
+	if err != nil {
+		return err
+	}
+	tid, err := s.ids.Next(ctx)
+	if err != nil {
+		return fmt.Errorf("auth verify token id: %w", err)
+	}
+	now := s.now().UTC()
+	if err := s.users.IssueToken(ctx, AuthToken{
+		ID:        tid,
+		UserID:    u.ID,
+		Purpose:   PurposeVerifyEmail,
+		Hash:      hash,
+		ExpiresAt: now.Add(verifyTTL),
+		CreatedAt: now,
+	}); err != nil {
+		return err
+	}
+	s.enqueueVerifyMail(u, raw)
+	return nil
+}
+
+func (s *Service) enqueueVerifyMail(u User, raw string) {
+	if s.mail == nil {
+		return
+	}
+	name := sanitizeLine(u.DisplayName)
+	link := strings.TrimRight(s.webOrigin, "/") + "/verify-email?token=" + raw
+	s.mail.Enqueue(mail.Message{
+		UserID:  u.ID,
+		To:      u.Email,
+		Subject: "Verify your Friendfold email",
+		Body: fmt.Sprintf("Hi %s,\n\nVerify your Friendfold email by opening this link:\n\n%s\n\nThis link expires in 24 hours. If you did not create an account, ignore this email.\n",
+			name, link),
+	})
+}
+
+func sanitizeLine(s string) string {
+	s = strings.ReplaceAll(s, "\r", " ")
+	return strings.ReplaceAll(s, "\n", " ")
+}
+
 func (s *Service) startSession(ctx context.Context, userID int64, userAgent, ip string) (string, error) {
 	sid, err := s.sessions.Create(ctx, session.Record{
 		UserID:    userID,
@@ -216,6 +307,24 @@ func (s *Service) hitLimit(ctx context.Context, action, ip, email string, ipLimi
 		} else if !res.Allowed {
 			return RateLimitError{RetryAfter: res.RetryAfter}
 		}
+	}
+	return nil
+}
+
+func (s *Service) hitLimitUser(ctx context.Context, action, ip string, userID int64, limit int) error {
+	if err := s.hitLimit(ctx, action, ip, "", limit, 0); err != nil {
+		return err
+	}
+	if s.limiter == nil || userID == 0 {
+		return nil
+	}
+	res, err := s.limiter.Allow(ctx, "rate:auth:"+action+":user:"+strconv.FormatInt(userID, 10), limit, authWindow)
+	if err != nil {
+		s.logger.Error("auth rate limit", slog.String("error", err.Error()), slog.String("action", action))
+		return nil
+	}
+	if !res.Allowed {
+		return RateLimitError{RetryAfter: res.RetryAfter}
 	}
 	return nil
 }

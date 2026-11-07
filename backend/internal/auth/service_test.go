@@ -3,6 +3,10 @@ package auth
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"regexp"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,11 +14,49 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/anhtuta/friendfold/backend/internal/platform/id"
+	"github.com/anhtuta/friendfold/backend/internal/platform/mail"
 	"github.com/anhtuta/friendfold/backend/internal/platform/ratelimit"
 	"github.com/anhtuta/friendfold/backend/internal/platform/session"
 )
 
-func testService(t *testing.T) (*Service, *memStore) {
+type recordingMail struct {
+	mu   sync.Mutex
+	msgs []mail.Message
+}
+
+func (r *recordingMail) Enqueue(msg mail.Message) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.msgs = append(r.msgs, msg)
+}
+
+func (r *recordingMail) last() mail.Message {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.msgs) == 0 {
+		return mail.Message{}
+	}
+	return r.msgs[len(r.msgs)-1]
+}
+
+func (r *recordingMail) len() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.msgs)
+}
+
+var verifyTokenRE = regexp.MustCompile(`token=([A-Za-z0-9_-]+)`)
+
+func tokenFromMail(t *testing.T, msg mail.Message) string {
+	t.Helper()
+	m := verifyTokenRE.FindStringSubmatch(msg.Body)
+	if len(m) != 2 {
+		t.Fatalf("no token in mail body")
+	}
+	return m[1]
+}
+
+func testService(t *testing.T) (*Service, *memStore, *recordingMail) {
 	t.Helper()
 	h, err := NewHasher(1)
 	if err != nil {
@@ -28,11 +70,12 @@ func testService(t *testing.T) (*Service, *memStore) {
 		t.Fatalf("id: %v", err)
 	}
 	users := newMemStore()
-	svc := NewService(users, session.NewStore(rdb), h, gen, ratelimit.New(rdb), nil)
+	rec := &recordingMail{}
+	svc := NewService(users, session.NewStore(rdb), h, gen, ratelimit.New(rdb), rec, testOrigin, nil)
 	svc.now = func() time.Time {
 		return time.Date(2026, 10, 29, 15, 0, 0, 0, time.UTC)
 	}
-	return svc, users
+	return svc, users, rec
 }
 
 func TestAgeGate(t *testing.T) {
@@ -51,7 +94,7 @@ func TestAgeGate(t *testing.T) {
 
 func TestRegisterAndLogin(t *testing.T) {
 	t.Parallel()
-	svc, users := testService(t)
+	svc, users, rec := testService(t)
 	ctx := context.Background()
 	in := RegisterInput{
 		Email:         "Minh@Example.com",
@@ -69,7 +112,17 @@ func TestRegisterAndLogin(t *testing.T) {
 		t.Errorf("email = %q", out.User.Email)
 	}
 	if out.User.EmailVerified {
-		t.Error("emailVerified should be false in phase 1")
+		t.Error("emailVerified should be false until the token is consumed")
+	}
+	if rec.len() != 1 {
+		t.Fatalf("verification mail count = %d", rec.len())
+	}
+	raw := tokenFromMail(t, rec.last())
+	if rec.last().To != "minh@example.com" {
+		t.Fatalf("mail to = %q", rec.last().To)
+	}
+	if !strings.Contains(rec.last().Body, "/verify-email?token="+raw) {
+		t.Fatal("mail missing verify link")
 	}
 	if out.SessionID == "" {
 		t.Fatal("missing session id")
@@ -111,7 +164,7 @@ func TestRegisterAndLogin(t *testing.T) {
 
 func TestLoginEnumeration(t *testing.T) {
 	t.Parallel()
-	svc, _ := testService(t)
+	svc, _, _ := testService(t)
 	ctx := context.Background()
 	_, err := svc.Register(ctx, RegisterInput{
 		Email:         "minh@example.com",
@@ -137,7 +190,7 @@ func TestLoginEnumeration(t *testing.T) {
 
 func TestRegisterRejectsUnderageAndTerms(t *testing.T) {
 	t.Parallel()
-	svc, _ := testService(t)
+	svc, _, _ := testService(t)
 	ctx := context.Background()
 	base := RegisterInput{
 		Email:       "kid@example.com",
@@ -155,6 +208,183 @@ func TestRegisterRejectsUnderageAndTerms(t *testing.T) {
 	if _, err := svc.Register(ctx, base); !errors.Is(err, ErrTermsRequired) {
 		t.Fatalf("terms: %v", err)
 	}
+}
+
+func TestVerifyEmailOnceThenRejects(t *testing.T) {
+	t.Parallel()
+	svc, users, rec := testService(t)
+	ctx := context.Background()
+	out, err := svc.Register(ctx, validRegister("minh@example.com"))
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	raw := tokenFromMail(t, rec.last())
+	if err := svc.VerifyEmail(ctx, raw, "10.0.0.8"); err != nil {
+		t.Fatalf("VerifyEmail: %v", err)
+	}
+	me, err := svc.Me(ctx, out.SessionID)
+	if err != nil {
+		t.Fatalf("Me: %v", err)
+	}
+	if !me.EmailVerified {
+		t.Fatal("expected verified")
+	}
+	stored, err := users.ByID(ctx, me.ID)
+	if err != nil || !stored.EmailVerified {
+		t.Fatalf("store verified: %v %+v", err, stored)
+	}
+	if err := svc.VerifyEmail(ctx, raw, "10.0.0.8"); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("second use: %v", err)
+	}
+}
+
+func TestVerifyEmailExpired(t *testing.T) {
+	t.Parallel()
+	svc, _, rec := testService(t)
+	ctx := context.Background()
+	start := time.Date(2026, 10, 29, 15, 0, 0, 0, time.UTC)
+	svc.now = func() time.Time { return start }
+	if _, err := svc.Register(ctx, validRegister("minh@example.com")); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	raw := tokenFromMail(t, rec.last())
+	svc.now = func() time.Time { return start.Add(25 * time.Hour) }
+	if err := svc.VerifyEmail(ctx, raw, "10.0.0.8"); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("expired: %v", err)
+	}
+}
+
+func TestResendInvalidatesPreviousToken(t *testing.T) {
+	t.Parallel()
+	svc, users, rec := testService(t)
+	ctx := context.Background()
+	out, err := svc.Register(ctx, validRegister("minh@example.com"))
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	first := tokenFromMail(t, rec.last())
+	if err := svc.ResendVerification(ctx, out.SessionID, "10.0.0.9"); err != nil {
+		t.Fatalf("Resend: %v", err)
+	}
+	if rec.len() != 2 {
+		t.Fatalf("mail count = %d", rec.len())
+	}
+	second := tokenFromMail(t, rec.last())
+	if first == second {
+		t.Fatal("resend reused token")
+	}
+	if users.unusedCount(out.User.ID, PurposeVerifyEmail) != 1 {
+		t.Fatalf("unused tokens = %d", users.unusedCount(out.User.ID, PurposeVerifyEmail))
+	}
+	if err := svc.VerifyEmail(ctx, first, "10.0.0.8"); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("old token: %v", err)
+	}
+	if err := svc.VerifyEmail(ctx, second, "10.0.0.8"); err != nil {
+		t.Fatalf("new token: %v", err)
+	}
+}
+
+func TestResendAlreadyVerifiedNoMail(t *testing.T) {
+	t.Parallel()
+	svc, _, rec := testService(t)
+	ctx := context.Background()
+	out, err := svc.Register(ctx, validRegister("minh@example.com"))
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := svc.VerifyEmail(ctx, tokenFromMail(t, rec.last()), "10.0.0.8"); err != nil {
+		t.Fatalf("VerifyEmail: %v", err)
+	}
+	n := rec.len()
+	if err := svc.ResendVerification(ctx, out.SessionID, "10.0.0.9"); err != nil {
+		t.Fatalf("Resend: %v", err)
+	}
+	if rec.len() != n {
+		t.Fatalf("sent mail after verified: %d vs %d", rec.len(), n)
+	}
+}
+
+func TestRegisterSucceedsWhenSMTPFails(t *testing.T) {
+	t.Parallel()
+	h, err := NewHasher(1)
+	if err != nil {
+		t.Fatalf("hasher: %v", err)
+	}
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	gen, err := id.NewGenerator(1)
+	if err != nil {
+		t.Fatalf("id: %v", err)
+	}
+	users := newMemStore()
+	q := mail.NewQueue(failingSender{}, slog.Default(), 1, context.Background())
+	svc := NewService(users, session.NewStore(rdb), h, gen, ratelimit.New(rdb), q, testOrigin, nil)
+	svc.now = func() time.Time {
+		return time.Date(2026, 10, 29, 15, 0, 0, 0, time.UTC)
+	}
+	out, err := svc.Register(context.Background(), validRegister("minh@example.com"))
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if out.SessionID == "" || out.User.ID == 0 {
+		t.Fatal("signup should succeed without SMTP")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := q.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if _, err := users.ByEmail(context.Background(), "minh@example.com"); err != nil {
+		t.Fatalf("user missing after smtp fail: %v", err)
+	}
+}
+
+func TestVerifyEmailEmptyToken(t *testing.T) {
+	t.Parallel()
+	svc, _, _ := testService(t)
+	err := svc.VerifyEmail(context.Background(), "  ", "10.0.0.8")
+	var ve ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("empty token: %v", err)
+	}
+}
+
+func TestResendRateLimit(t *testing.T) {
+	t.Parallel()
+	svc, _, _ := testService(t)
+	ctx := context.Background()
+	out, err := svc.Register(ctx, validRegister("minh@example.com"))
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	for i := 0; i < resendLimit; i++ {
+		if err := svc.ResendVerification(ctx, out.SessionID, "10.0.0.9"); err != nil {
+			t.Fatalf("resend %d: %v", i, err)
+		}
+	}
+	err = svc.ResendVerification(ctx, out.SessionID, "10.0.0.9")
+	var rl RateLimitError
+	if !errors.As(err, &rl) {
+		t.Fatalf("expected rate limit, got %v", err)
+	}
+}
+
+func validRegister(email string) RegisterInput {
+	return RegisterInput{
+		Email:         email,
+		Password:      "correct-horse-battery",
+		DisplayName:   "Minh",
+		DateOfBirth:   time.Date(1998, 4, 12, 0, 0, 0, 0, time.UTC),
+		TermsAccepted: true,
+		IP:            "127.0.0.1",
+	}
+}
+
+type failingSender struct{}
+
+func (failingSender) Send(context.Context, mail.Message) error {
+	return errors.New("smtp unavailable")
 }
 
 func stringsHasPrefix(s, p string) bool {
