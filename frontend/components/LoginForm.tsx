@@ -7,6 +7,7 @@ import { useState } from "react";
 import { apiFetch, readErrorMessage } from "@/lib/api/client";
 import {
   emailLabel,
+  forgotPasswordLink,
   genericAuthError,
   needAccountPrompt,
   loginHeading,
@@ -88,6 +89,14 @@ export function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </label>
+        <p className="text-sm">
+          <Link
+            href="/forgot-password"
+            className="text-accent underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            {forgotPasswordLink}
+          </Link>
+        </p>
         <button
           type="submit"
           disabled={pending}

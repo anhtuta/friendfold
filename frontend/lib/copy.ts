@@ -67,3 +67,30 @@ export const unverifiedBannerMessage =
 export const resendVerificationLabel = "Resend verification email";
 
 export const resendVerificationSent = "We sent a new verification email.";
+
+export const forgotPasswordHeading = "Forgot your password?";
+
+export const forgotPasswordSubmit = "Send reset link";
+
+export const forgotPasswordSent =
+  "If that email is verified on Friendfold, we sent a reset link.";
+
+export const forgotPasswordLink = "Forgot password?";
+
+export const resetPasswordHeading = "Choose a new password";
+
+export const resetPasswordSubmit = "Reset password";
+
+export const resetPasswordSuccess = "Your password has been reset. Sign in.";
+
+export const resetPasswordMissingToken =
+  "This reset link is missing a token. Request a new email from Friendfold.";
+
+export const resetPasswordInvalid =
+  "This reset link is invalid or has expired.";
+
+export const newPasswordLabel = "New password";
+
+export const confirmPasswordLabel = "Confirm new password";
+
+export const passwordMismatch = "Passwords do not match.";

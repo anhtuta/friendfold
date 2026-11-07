@@ -202,6 +202,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/password/forgot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a password reset email
+         * @description Always returns 202 for a well-formed email so callers cannot tell
+         *     whether the address exists or is verified. A reset mail is enqueued
+         *     **only** when a live user exists and `email_verified_at` is set.
+         *
+         *     Issues a single-use `reset_password` token (1 hour TTL, SHA-256
+         *     stored). A new request invalidates unused tokens of that purpose.
+         *     SMTP/queue failure is logged and still returns 202.
+         *
+         *     Rate limited per IP and per email hash. Origin must match `WEB_ORIGIN`.
+         *     Unknown JSON fields are rejected.
+         */
+        post: operations["forgotPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/password/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a new password with a reset token
+         * @description Consumes a single-use `reset_password` token, writes a new argon2id
+         *     hash, and revokes **all** sessions for that user. Public: the token
+         *     is the capability. No session cookie is set; the user signs in
+         *     afterward.
+         *
+         *     Unknown, expired, consumed, malformed, and wrong-purpose tokens all
+         *     return 400 `invalid_token` with the same body. An empty token is 400
+         *     `validation_error`. Success is 204.
+         *
+         *     Rate limited per IP. Origin must match `WEB_ORIGIN`. Unknown JSON
+         *     fields are rejected.
+         */
+        post: operations["resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/password/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change or add a password while signed in
+         * @description Requires a session. When `password_hash` is set, `currentPassword` is
+         *     required and must match (wrong → 401 `invalid_credentials`). When
+         *     `password_hash` is NULL (Google-only account, phase 4), omit
+         *     `currentPassword` to add a password.
+         *
+         *     On success, every existing session is revoked and a new session
+         *     cookie is set for this device (204). Other devices must sign in
+         *     again.
+         *
+         *     Rate limited per IP and per user id. Origin must match `WEB_ORIGIN`.
+         *     Unknown JSON fields are rejected.
+         */
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -268,6 +357,29 @@ export interface components {
              */
             token: string;
         };
+        ForgotPasswordRequest: {
+            /** Format: email */
+            email: string;
+        };
+        ResetPasswordRequest: {
+            /**
+             * @description Unpadded base64url of 32 random bytes (~43 chars). Presented once
+             *     in the email link; the API stores only SHA-256 of this string.
+             *     Example values in this spec are `example-reset-token`, not secrets.
+             */
+            token: string;
+            /** @description 8–72 bytes; must not equal the account email. */
+            newPassword: string;
+        };
+        ChangePasswordRequest: {
+            /**
+             * @description Required when the account already has a password. Omit when adding
+             *     a password to a Google-only account (`password_hash` is NULL).
+             */
+            currentPassword?: string;
+            /** @description 8–72 bytes; must not equal the account email. */
+            newPassword: string;
+        };
     };
     responses: {
         /** @description Application error using the shared envelope */
@@ -313,6 +425,19 @@ export interface components {
                 "application/json": components["schemas"]["ErrorEnvelope"];
             };
         };
+        /**
+         * @description Missing session (`unauthenticated`) or wrong `currentPassword`
+         *     (`invalid_credentials`). Both are 401.
+         */
+        ChangePasswordUnauthorized: {
+            headers: {
+                "X-Request-Id": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
         /** @description Missing or invalid session */
         Unauthenticated: {
             headers: {
@@ -348,6 +473,20 @@ export interface components {
          *     consumed, or malformed) or `validation_error` (empty token or bad JSON).
          */
         VerifyEmailError: {
+            headers: {
+                "X-Request-Id": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description Reset failed. `error.code` is `invalid_token` (unknown, expired,
+         *     consumed, malformed, or wrong purpose) or `validation_error` (empty
+         *     token, bad password, or bad JSON).
+         */
+        ResetPasswordError: {
             headers: {
                 "X-Request-Id": components["headers"]["RequestId"];
                 [name: string]: unknown;
@@ -586,6 +725,86 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["OriginMismatch"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    forgotPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted (mail may or may not have been enqueued) */
+            202: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            403: components["responses"]["OriginMismatch"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password updated; all sessions revoked */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ResetPasswordError"];
+            403: components["responses"]["OriginMismatch"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password updated; this device given a new session */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    "Set-Cookie": components["headers"]["SetSessionCookie"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["ChangePasswordUnauthorized"];
             403: components["responses"]["OriginMismatch"];
             429: components["responses"]["RateLimited"];
         };

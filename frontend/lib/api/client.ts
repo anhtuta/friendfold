@@ -6,6 +6,8 @@ export type User = components["schemas"]["User"];
 export type RegisterRequest = components["schemas"]["RegisterRequest"];
 export type LoginRequest = components["schemas"]["LoginRequest"];
 export type VerifyEmailRequest = components["schemas"]["VerifyEmailRequest"];
+export type ForgotPasswordRequest = components["schemas"]["ForgotPasswordRequest"];
+export type ResetPasswordRequest = components["schemas"]["ResetPasswordRequest"];
 export type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
 
 export async function apiFetch(

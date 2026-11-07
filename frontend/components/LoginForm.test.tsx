@@ -2,7 +2,12 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { loginHeading, needAccountPrompt, submitSignIn } from "@/lib/copy";
+import {
+  forgotPasswordLink,
+  loginHeading,
+  needAccountPrompt,
+  submitSignIn,
+} from "@/lib/copy";
 
 import { AuthContext, type AuthState } from "./AuthProvider";
 import { LoginForm } from "./LoginForm";
@@ -37,6 +42,9 @@ describe("LoginForm", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: submitSignIn })).toBeEnabled();
     expect(screen.getByText(needAccountPrompt)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: forgotPasswordLink }),
+    ).toHaveAttribute("href", "/forgot-password");
   });
 
   it("shows the API error on failed login", async () => {
