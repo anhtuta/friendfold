@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 
 import { AuthProvider } from "@/components/AuthProvider";
 import { SiteHeader } from "@/components/SiteHeader";
+import { UnverifiedEmailBanner } from "@/components/UnverifiedEmailBanner";
 
 import "./globals.css";
 
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       >
         <AuthProvider>
           <SiteHeader />
+          <UnverifiedEmailBanner />
           {children}
         </AuthProvider>
       </body>
