@@ -274,7 +274,7 @@ paths:
             examples:
               token:
                 value:
-                  token: "dGhpcy1pcy1hLXRlc3QtdG9rZW4tbm90LXJlYWw"
+                  token: example-verify-token
       responses:
         "204":
           description: Email verified (or already verified); token consumed
