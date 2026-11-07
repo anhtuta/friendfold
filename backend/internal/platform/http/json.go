@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 )
 
 const maxJSONBody = 64 << 10 // 64 KiB
@@ -24,15 +23,11 @@ type errorBody struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
-// WriteJSON encodes v as application/json. extraHeaders are applied before the body.
+// WriteJSON encodes v as application/json.
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(true)
-	if err := enc.Encode(v); err != nil {
-		return
-	}
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 // WriteError writes the shared error envelope.
@@ -50,29 +45,11 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
-		return wrapJSONError(err)
+		return fmt.Errorf("decode json: %w", ErrInvalidJSON)
 	}
 	// Trailing junk is invalid.
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
 		return fmt.Errorf("decode json: %w", ErrInvalidJSON)
 	}
 	return nil
-}
-
-func wrapJSONError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var maxErr *http.MaxBytesError
-	if errors.As(err, &maxErr) {
-		return fmt.Errorf("decode json: %w", ErrInvalidJSON)
-	}
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-		return fmt.Errorf("decode json: %w", ErrInvalidJSON)
-	}
-	msg := err.Error()
-	if strings.Contains(msg, "unknown field") {
-		return fmt.Errorf("decode json: %w", ErrInvalidJSON)
-	}
-	return fmt.Errorf("decode json: %w", ErrInvalidJSON)
 }
