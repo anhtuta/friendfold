@@ -28,7 +28,7 @@ tags:
   - name: platform
     description: Process liveness and dependency readiness. No product data.
   - name: auth
-    description: Email/password accounts and server-side sessions.
+    description: Email/password accounts, email verification, and server-side sessions.
 security: []
 paths:
   /v1/health:
@@ -107,8 +107,10 @@ paths:
         Date of birth must be 13+ (UTC calendar date). `termsAccepted` must be
         true. Email is stored lowercased; a live (non-deleted) email is unique.
 
-        Phase 1 does not send a verification email (that is phase 2). The
-        account can use the product with `emailVerified: false`.
+        After the user and session are committed, a verification email is
+        enqueued (24h single-use token). SMTP or queue failure is logged and
+        does **not** fail registration; the user can resend. The account can
+        use the product with `emailVerified: false`.
 
         Unknown JSON fields are rejected. Rate limited per IP and per email hash.
       security: []
@@ -244,6 +246,75 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           $ref: "#/components/responses/Unauthenticated"
+  /v1/auth/verify-email:
+    post:
+      operationId: verifyEmail
+      tags:
+        - auth
+      summary: Verify email with a one-time token
+      description: |
+        Consumes a single-use `verify_email` token issued at registration or
+        resend and sets `email_verified_at`. Public: the token is the
+        capability. Session cookie is not required.
+
+        Unknown, expired, consumed, and malformed tokens all return 400
+        `invalid_token` with the same body. An empty token is 400
+        `validation_error`. Success is 204; the client should call
+        `GET /v1/auth/me` when signed in.
+
+        Rate limited per IP. Origin must match `WEB_ORIGIN`. Unknown JSON
+        fields are rejected.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailRequest"
+            examples:
+              token:
+                value:
+                  token: "dGhpcy1pcy1hLXRlc3QtdG9rZW4tbm90LXJlYWw"
+      responses:
+        "204":
+          description: Email verified (or already verified); token consumed
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+        "400":
+          $ref: "#/components/responses/VerifyEmailError"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/auth/resend-verification:
+    post:
+      operationId: resendVerification
+      tags:
+        - auth
+      summary: Send a new verification email
+      description: |
+        Requires a session. Invalidates unused `verify_email` tokens for the
+        current user, issues a new 24h token, and enqueues mail. If the email
+        is already verified, returns 204 without sending.
+
+        SMTP failure is logged and still returns 204 (the user can try again).
+        Rate limited per IP and per user id. Origin must match `WEB_ORIGIN`.
+        No request body.
+      security:
+        - cookieAuth: []
+      responses:
+        "204":
+          description: Accepted (mail enqueued, already verified, or send skipped)
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "429":
+          $ref: "#/components/responses/RateLimited"
 components:
   securitySchemes:
     cookieAuth:
@@ -389,6 +460,28 @@ components:
                 error:
                   code: email_taken
                   message: Email is already registered
+    VerifyEmailError:
+      description: |
+        Verify failed. `error.code` is `invalid_token` (unknown, expired,
+        consumed, or malformed) or `validation_error` (empty token or bad JSON).
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            invalid:
+              value:
+                error:
+                  code: invalid_token
+                  message: This verification link is invalid or has expired
+            empty:
+              value:
+                error:
+                  code: validation_error
+                  message: token is required
     RateLimited:
       description: Too many attempts from this IP or email
       headers:
@@ -479,7 +572,7 @@ components:
           maxLength: 254
         emailVerified:
           type: boolean
-          description: Always false until feature 02 phase 2 (email verification).
+          description: True after a valid `verify_email` token is consumed.
         displayName:
           type: string
           minLength: 1
@@ -529,3 +622,16 @@ components:
           type: string
           minLength: 1
           maxLength: 72
+    VerifyEmailRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: |
+            Unpadded base64url of 32 random bytes (~43 chars). Presented once
+            in the email link; the API stores only SHA-256 of this string.
