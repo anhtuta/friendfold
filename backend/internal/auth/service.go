@@ -26,6 +26,10 @@ const (
 	loginLimit       = 10
 	verifyIPLimit    = 20
 	resendLimit      = 3
+	forgotIPLimit    = 5
+	forgotEmailLim   = 3
+	resetIPLimit     = 20
+	changeLimit      = 5
 	authWindow       = 15 * time.Minute
 )
 
@@ -37,6 +41,7 @@ type sessions interface {
 	Create(ctx context.Context, rec session.Record) (string, error)
 	GetAndTouch(ctx context.Context, id string) (session.Record, error)
 	Delete(ctx context.Context, id string) error
+	BumpGeneration(ctx context.Context, userID int64) (int64, error)
 }
 
 type ids interface {
@@ -254,6 +259,152 @@ func (s *Service) issueAndEnqueueVerify(ctx context.Context, u User) error {
 	}
 	s.enqueueVerifyMail(u, raw)
 	return nil
+}
+
+// ForgotPassword always succeeds for a well-formed email. Mail is sent only
+// when a live verified user exists.
+func (s *Service) ForgotPassword(ctx context.Context, email, ip string) error {
+	if err := s.hitLimit(ctx, "forgot", ip, email, forgotIPLimit, forgotEmailLim); err != nil {
+		return err
+	}
+	norm, err := normalizeEmail(email)
+	if err != nil {
+		return err
+	}
+	u, err := s.users.ByEmail(ctx, norm)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	if !u.EmailVerified {
+		return nil
+	}
+	if err := s.issueAndEnqueueReset(ctx, u); err != nil {
+		s.logger.Error("auth reset email enqueue", slog.String("error", err.Error()), slog.Int64("user_id", u.ID))
+	}
+	return nil
+}
+
+// ResetPassword consumes a reset token, revokes every session, and writes a
+// new argon2id hash. No session is created.
+func (s *Service) ResetPassword(ctx context.Context, token, newPassword, ip string) error {
+	if err := s.hitLimit(ctx, "reset", ip, "", resetIPLimit, 0); err != nil {
+		return err
+	}
+	hash, err := HashToken(token)
+	if err != nil {
+		return err
+	}
+	now := s.now().UTC()
+	u, err := s.users.LiveResetUser(ctx, hash, now)
+	if err != nil {
+		return err
+	}
+	if err := validatePassword(newPassword, u.Email); err != nil {
+		return err
+	}
+	encoded, err := s.hasher.Hash(ctx, newPassword)
+	if err != nil {
+		return err
+	}
+	if _, err := s.sessions.BumpGeneration(ctx, u.ID); err != nil {
+		return fmt.Errorf("auth reset bump: %w", err)
+	}
+	_, err = s.users.ConsumeResetAndSetPassword(ctx, hash, encoded, now)
+	return err
+}
+
+// ChangePassword updates the password for the session's user. When a hash
+// already exists, currentPassword must match. All sessions are revoked and a
+// new one is returned for this device.
+func (s *Service) ChangePassword(ctx context.Context, sessionID, currentPassword, newPassword, ip, userAgent string) (string, error) {
+	rec, err := s.sessions.GetAndTouch(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, session.ErrNotFound) {
+			return "", ErrUnauthenticated
+		}
+		return "", fmt.Errorf("auth change session: %w", err)
+	}
+	u, err := s.users.ByID(ctx, rec.UserID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			_ = s.hasher.CompareDummy(ctx, currentPassword)
+			return "", ErrUnauthenticated
+		}
+		return "", err
+	}
+	if err := s.hitLimitUser(ctx, "change", ip, u.ID, changeLimit); err != nil {
+		return "", err
+	}
+	if u.PasswordHash != "" {
+		if currentPassword == "" {
+			return "", ValidationError{Msg: "current password is required"}
+		}
+		ok, err := s.hasher.Compare(ctx, u.PasswordHash, currentPassword)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return "", ErrInvalidCredentials
+		}
+	} else if currentPassword != "" {
+		return "", ValidationError{Msg: "current password must not be set"}
+	}
+	if err := validatePassword(newPassword, u.Email); err != nil {
+		return "", err
+	}
+	encoded, err := s.hasher.Hash(ctx, newPassword)
+	if err != nil {
+		return "", err
+	}
+	if _, err := s.sessions.BumpGeneration(ctx, u.ID); err != nil {
+		return "", fmt.Errorf("auth change bump: %w", err)
+	}
+	if err := s.users.UpdatePasswordHash(ctx, u.ID, encoded, s.now().UTC()); err != nil {
+		return "", err
+	}
+	return s.startSession(ctx, u.ID, userAgent, ip)
+}
+
+func (s *Service) issueAndEnqueueReset(ctx context.Context, u User) error {
+	raw, hash, err := NewVerifyToken()
+	if err != nil {
+		return err
+	}
+	tid, err := s.ids.Next(ctx)
+	if err != nil {
+		return fmt.Errorf("auth reset token id: %w", err)
+	}
+	now := s.now().UTC()
+	if err := s.users.IssueToken(ctx, AuthToken{
+		ID:        tid,
+		UserID:    u.ID,
+		Purpose:   PurposeResetPassword,
+		Hash:      hash,
+		ExpiresAt: now.Add(resetTTL),
+		CreatedAt: now,
+	}); err != nil {
+		return err
+	}
+	s.enqueueResetMail(u, raw)
+	return nil
+}
+
+func (s *Service) enqueueResetMail(u User, raw string) {
+	if s.mail == nil {
+		return
+	}
+	name := sanitizeLine(u.DisplayName)
+	link := strings.TrimRight(s.webOrigin, "/") + "/reset-password?token=" + raw
+	s.mail.Enqueue(mail.Message{
+		UserID:  u.ID,
+		To:      u.Email,
+		Subject: "Reset your Friendfold password",
+		Body: fmt.Sprintf("Hi %s,\n\nReset your Friendfold password by opening this link:\n\n%s\n\nThis link expires in 1 hour. If you did not request a reset, ignore this email.\n",
+			name, link),
+	})
 }
 
 func (s *Service) enqueueVerifyMail(u User, raw string) {

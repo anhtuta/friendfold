@@ -59,3 +59,16 @@ SET consumed_at = $3
 WHERE user_id = $1
   AND purpose = $2
   AND consumed_at IS NULL;
+
+-- name: GetLiveAuthToken :one
+SELECT id, user_id, purpose, token_hash, expires_at, consumed_at, created_at
+FROM auth_tokens
+WHERE token_hash = $1
+  AND purpose = $2
+  AND consumed_at IS NULL
+  AND expires_at > $3;
+
+-- name: UpdatePasswordHash :exec
+UPDATE users
+SET password_hash = $2, updated_at = $3
+WHERE id = $1 AND deleted_at IS NULL;

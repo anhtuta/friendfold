@@ -107,6 +107,65 @@ func (m *memStore) ConsumeVerifyToken(_ context.Context, hash []byte, now time.T
 	return 0, ErrInvalidToken
 }
 
+func (m *memStore) LiveResetUser(_ context.Context, hash []byte, now time.Time) (User, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := range m.tokens {
+		t := &m.tokens[i]
+		if !bytes.Equal(t.Hash, hash) || t.Purpose != PurposeResetPassword || t.Consumed != nil {
+			continue
+		}
+		if !t.ExpiresAt.After(now) {
+			continue
+		}
+		u, ok := m.byID[t.UserID]
+		if !ok {
+			return User{}, ErrInvalidResetToken
+		}
+		return u, nil
+	}
+	return User{}, ErrInvalidResetToken
+}
+
+func (m *memStore) ConsumeResetAndSetPassword(_ context.Context, hash []byte, passwordHash string, now time.Time) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := range m.tokens {
+		t := &m.tokens[i]
+		if !bytes.Equal(t.Hash, hash) || t.Purpose != PurposeResetPassword || t.Consumed != nil {
+			continue
+		}
+		if !t.ExpiresAt.After(now) {
+			continue
+		}
+		c := now
+		t.Consumed = &c
+		u, ok := m.byID[t.UserID]
+		if !ok {
+			return 0, ErrInvalidResetToken
+		}
+		u.PasswordHash = passwordHash
+		m.byID[u.ID] = u
+		m.byEmail[u.Email] = u
+		return t.UserID, nil
+	}
+	return 0, ErrInvalidResetToken
+}
+
+func (m *memStore) UpdatePasswordHash(_ context.Context, userID int64, passwordHash string, now time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.byID[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	u.PasswordHash = passwordHash
+	_ = now
+	m.byID[u.ID] = u
+	m.byEmail[u.Email] = u
+	return nil
+}
+
 func (m *memStore) unusedCount(userID int64, purpose string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -34,11 +34,14 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Post("/register", h.register)
 		r.Post("/login", h.login)
 		r.Post("/verify-email", h.verifyEmail)
+		r.Post("/password/forgot", h.forgotPassword)
+		r.Post("/password/reset", h.resetPassword)
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireSession)
 			r.Get("/me", h.me)
 			r.Post("/logout", h.logout)
 			r.Post("/resend-verification", h.resendVerification)
+			r.Post("/password/change", h.changePassword)
 		})
 	})
 }
@@ -58,6 +61,20 @@ type loginBody struct {
 
 type verifyEmailBody struct {
 	Token string `json:"token"`
+}
+
+type forgotPasswordBody struct {
+	Email string `json:"email"`
+}
+
+type resetPasswordBody struct {
+	Token       string `json:"token"`
+	NewPassword string `json:"newPassword"`
+}
+
+type changePasswordBody struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
 }
 
 type userBody struct {
@@ -133,6 +150,52 @@ func (h *Handler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handler) forgotPassword(w http.ResponseWriter, r *http.Request) {
+	var body forgotPasswordBody
+	if err := httpx.DecodeJSON(w, r, &body); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "validation_error", "Request is invalid")
+		return
+	}
+	if err := h.svc.ForgotPassword(r.Context(), body.Email, httpx.ClientIP(r)); err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *Handler) resetPassword(w http.ResponseWriter, r *http.Request) {
+	var body resetPasswordBody
+	if err := httpx.DecodeJSON(w, r, &body); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "validation_error", "Request is invalid")
+		return
+	}
+	if err := h.svc.ResetPassword(r.Context(), body.Token, body.NewPassword, httpx.ClientIP(r)); err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
+	var body changePasswordBody
+	if err := httpx.DecodeJSON(w, r, &body); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "validation_error", "Request is invalid")
+		return
+	}
+	c, err := r.Cookie(httpx.SessionCookieName)
+	if err != nil || c.Value == "" {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthenticated", "Authentication required")
+		return
+	}
+	sid, err := h.svc.ChangePassword(r.Context(), c.Value, body.CurrentPassword, body.NewPassword, httpx.ClientIP(r), r.UserAgent())
+	if err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	httpx.SetSessionCookie(w, sid, h.cookieSecure)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handler) resendVerification(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie(httpx.SessionCookieName)
 	if err != nil || c.Value == "" {
@@ -193,6 +256,8 @@ func (h *Handler) writeErr(w http.ResponseWriter, err error) {
 		httpx.WriteError(w, http.StatusBadRequest, "underage", "You must be at least 13 years old")
 	case errors.Is(err, ErrEmailTaken):
 		httpx.WriteError(w, http.StatusConflict, "email_taken", "Email is already registered")
+	case errors.Is(err, ErrInvalidResetToken):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_token", "This reset link is invalid or has expired")
 	case errors.Is(err, ErrInvalidToken):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_token", "This verification link is invalid or has expired")
 	case errors.Is(err, ErrInvalidCredentials):

@@ -326,6 +326,114 @@ func TestResendOriginRejected(t *testing.T) {
 	}
 }
 
+func TestForgotResetChangeRoundTrip(t *testing.T) {
+	t.Parallel()
+	h, mailer := testHandler(t)
+	reg := doJSON(t, h, http.MethodPost, "/v1/auth/register", `{
+		"email":"minh@example.com",
+		"password":"correct-horse-battery",
+		"displayName":"Minh",
+		"dateOfBirth":"1998-04-12",
+		"termsAccepted":true
+	}`, nil)
+	cookie := sessionCookie(t, reg)
+	unknown := doJSON(t, h, http.MethodPost, "/v1/auth/password/forgot", `{"email":"nobody@example.com"}`, nil)
+	if unknown.Code != http.StatusAccepted || unknown.Body.Len() != 0 {
+		t.Fatalf("unknown forgot: %d %q", unknown.Code, unknown.Body.String())
+	}
+	unverified := doJSON(t, h, http.MethodPost, "/v1/auth/password/forgot", `{"email":"minh@example.com"}`, nil)
+	if unverified.Code != http.StatusAccepted {
+		t.Fatalf("unverified forgot: %d %s", unverified.Code, unverified.Body.String())
+	}
+	verify := doJSON(t, h, http.MethodPost, "/v1/auth/verify-email", `{"token":"`+tokenFromMail(t, mailer.last())+`"}`, nil)
+	if verify.Code != http.StatusNoContent {
+		t.Fatalf("verify: %d %s", verify.Code, verify.Body.String())
+	}
+	n := mailer.len()
+	forgot := doJSON(t, h, http.MethodPost, "/v1/auth/password/forgot", `{"email":"minh@example.com"}`, nil)
+	if forgot.Code != http.StatusAccepted {
+		t.Fatalf("forgot: %d %s", forgot.Code, forgot.Body.String())
+	}
+	if mailer.len() != n+1 {
+		t.Fatalf("reset mail count = %d", mailer.len())
+	}
+	raw := tokenFromMail(t, mailer.last())
+	reset := doJSON(t, h, http.MethodPost, "/v1/auth/password/reset", `{"token":"`+raw+`","newPassword":"new-horse-battery-1"}`, nil)
+	if reset.Code != http.StatusNoContent {
+		t.Fatalf("reset: %d %s", reset.Code, reset.Body.String())
+	}
+	if len(reset.Result().Cookies()) != 0 {
+		t.Fatal("reset must not set a session cookie")
+	}
+	me := doJSON(t, h, http.MethodGet, "/v1/auth/me", "", []*http.Cookie{cookie})
+	if me.Code != http.StatusUnauthorized {
+		t.Fatalf("me after reset: %d %s", me.Code, me.Body.String())
+	}
+	login := doJSON(t, h, http.MethodPost, "/v1/auth/login", `{"email":"minh@example.com","password":"new-horse-battery-1"}`, nil)
+	if login.Code != http.StatusOK {
+		t.Fatalf("login: %d %s", login.Code, login.Body.String())
+	}
+	fresh := sessionCookie(t, login)
+	change := doJSON(t, h, http.MethodPost, "/v1/auth/password/change", `{"currentPassword":"new-horse-battery-1","newPassword":"third-horse-battery"}`, []*http.Cookie{fresh})
+	if change.Code != http.StatusNoContent {
+		t.Fatalf("change: %d %s", change.Code, change.Body.String())
+	}
+	newer := sessionCookie(t, change)
+	still := doJSON(t, h, http.MethodGet, "/v1/auth/me", "", []*http.Cookie{fresh})
+	if still.Code != http.StatusUnauthorized {
+		t.Fatalf("old cookie after change: %d", still.Code)
+	}
+	ok := doJSON(t, h, http.MethodGet, "/v1/auth/me", "", []*http.Cookie{newer})
+	if ok.Code != http.StatusOK {
+		t.Fatalf("new cookie: %d %s", ok.Code, ok.Body.String())
+	}
+}
+
+func TestResetWrongPurposeAndEmptyToken(t *testing.T) {
+	t.Parallel()
+	h, mailer := testHandler(t)
+	doJSON(t, h, http.MethodPost, "/v1/auth/register", `{
+		"email":"minh@example.com",
+		"password":"correct-horse-battery",
+		"displayName":"Minh",
+		"dateOfBirth":"1998-04-12",
+		"termsAccepted":true
+	}`, nil)
+	verifyTok := tokenFromMail(t, mailer.last())
+	bad := doJSON(t, h, http.MethodPost, "/v1/auth/password/reset", `{"token":"`+verifyTok+`","newPassword":"new-horse-battery-1"}`, nil)
+	if bad.Code != http.StatusBadRequest || !strings.Contains(bad.Body.String(), "invalid_token") || !strings.Contains(bad.Body.String(), "reset link") {
+		t.Fatalf("wrong purpose: %d %s", bad.Code, bad.Body.String())
+	}
+	empty := doJSON(t, h, http.MethodPost, "/v1/auth/password/reset", `{"token":"","newPassword":"new-horse-battery-1"}`, nil)
+	if empty.Code != http.StatusBadRequest || !strings.Contains(empty.Body.String(), "validation_error") {
+		t.Fatalf("empty: %d %s", empty.Code, empty.Body.String())
+	}
+}
+
+func TestForgotResetChangeOriginRejected(t *testing.T) {
+	t.Parallel()
+	h, _ := testHandler(t)
+	for _, path := range []string{"/v1/auth/password/forgot", "/v1/auth/password/reset", "/v1/auth/password/change"} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", "https://evil.example")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "origin_mismatch") {
+			t.Fatalf("%s: %d %s", path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestChangeRequiresSession(t *testing.T) {
+	t.Parallel()
+	h, _ := testHandler(t)
+	rec := doJSON(t, h, http.MethodPost, "/v1/auth/password/change", `{"currentPassword":"x","newPassword":"new-horse-battery-1"}`, nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandlerVerifyEmailEmptyToken(t *testing.T) {
 	t.Parallel()
 	h, _ := testHandler(t)

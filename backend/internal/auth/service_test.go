@@ -370,6 +370,242 @@ func TestResendRateLimit(t *testing.T) {
 	}
 }
 
+func TestForgotAlways202SendsOnlyIfVerified(t *testing.T) {
+	t.Parallel()
+	svc, _, rec := testService(t)
+	ctx := context.Background()
+	if err := svc.ForgotPassword(ctx, "nobody@example.com", "10.0.0.4"); err != nil {
+		t.Fatalf("unknown: %v", err)
+	}
+	if rec.len() != 0 {
+		t.Fatal("mailed unknown address")
+	}
+	out, err := svc.Register(ctx, validRegister("minh@example.com"))
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if rec.len() != 1 {
+		t.Fatalf("verify mail = %d", rec.len())
+	}
+	if err := svc.ForgotPassword(ctx, "minh@example.com", "10.0.0.4"); err != nil {
+		t.Fatalf("unverified forgot: %v", err)
+	}
+	if rec.len() != 1 {
+		t.Fatal("mailed unverified address")
+	}
+	if err := svc.VerifyEmail(ctx, tokenFromMail(t, rec.last()), "10.0.0.8"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	_ = out
+	if err := svc.ForgotPassword(ctx, "Minh@Example.com", "10.0.0.4"); err != nil {
+		t.Fatalf("verified forgot: %v", err)
+	}
+	if rec.len() != 2 {
+		t.Fatalf("reset mail = %d", rec.len())
+	}
+	if rec.last().Subject != "Reset your Friendfold password" {
+		t.Fatalf("subject = %q", rec.last().Subject)
+	}
+	raw := tokenFromMail(t, rec.last())
+	if !strings.Contains(rec.last().Body, "/reset-password?token="+raw) {
+		t.Fatal("mail missing reset link")
+	}
+}
+
+func TestForgotInvalidatesPreviousResetToken(t *testing.T) {
+	t.Parallel()
+	svc, users, rec := testService(t)
+	ctx := context.Background()
+	out, err := svc.Register(ctx, validRegister("minh@example.com"))
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := svc.VerifyEmail(ctx, tokenFromMail(t, rec.last()), "10.0.0.8"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if err := svc.ForgotPassword(ctx, "minh@example.com", "10.0.0.4"); err != nil {
+		t.Fatalf("forgot: %v", err)
+	}
+	first := tokenFromMail(t, rec.last())
+	if err := svc.ForgotPassword(ctx, "minh@example.com", "10.0.0.5"); err != nil {
+		t.Fatalf("forgot 2: %v", err)
+	}
+	second := tokenFromMail(t, rec.last())
+	if first == second {
+		t.Fatal("reused reset token")
+	}
+	if users.unusedCount(out.User.ID, PurposeResetPassword) != 1 {
+		t.Fatalf("unused reset tokens = %d", users.unusedCount(out.User.ID, PurposeResetPassword))
+	}
+	if err := svc.ResetPassword(ctx, first, "new-horse-battery-1", "10.0.0.6"); !errors.Is(err, ErrInvalidResetToken) {
+		t.Fatalf("old token: %v", err)
+	}
+	if err := svc.ResetPassword(ctx, second, "new-horse-battery-1", "10.0.0.6"); err != nil {
+		t.Fatalf("new token: %v", err)
+	}
+}
+
+func TestResetPasswordRevokesAllSessionsAndOldPasswordFails(t *testing.T) {
+	t.Parallel()
+	svc, _, rec := testService(t)
+	ctx := context.Background()
+	first, err := svc.Register(ctx, validRegister("minh@example.com"))
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := svc.VerifyEmail(ctx, tokenFromMail(t, rec.last()), "10.0.0.8"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	second, err := svc.Login(ctx, LoginInput{Email: "minh@example.com", Password: "correct-horse-battery", IP: "10.0.0.2"})
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if err := svc.ForgotPassword(ctx, "minh@example.com", "10.0.0.4"); err != nil {
+		t.Fatalf("forgot: %v", err)
+	}
+	raw := tokenFromMail(t, rec.last())
+	if err := svc.ResetPassword(ctx, raw, "new-horse-battery-1", "10.0.0.6"); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if _, err := svc.Me(ctx, first.SessionID); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("first session: %v", err)
+	}
+	if _, err := svc.Me(ctx, second.SessionID); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("second session: %v", err)
+	}
+	if _, err := svc.Login(ctx, LoginInput{Email: "minh@example.com", Password: "correct-horse-battery", IP: "10.0.0.2"}); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("old password: %v", err)
+	}
+	login, err := svc.Login(ctx, LoginInput{Email: "minh@example.com", Password: "new-horse-battery-1", IP: "10.0.0.2"})
+	if err != nil {
+		t.Fatalf("new password: %v", err)
+	}
+	if login.SessionID == first.SessionID || login.SessionID == second.SessionID {
+		t.Fatal("reset reused a revoked session id")
+	}
+	if err := svc.ResetPassword(ctx, raw, "other-horse-battery-2", "10.0.0.6"); !errors.Is(err, ErrInvalidResetToken) {
+		t.Fatalf("second use: %v", err)
+	}
+}
+
+func TestResetRejectsExpiredWrongPurposeAndEmpty(t *testing.T) {
+	t.Parallel()
+	svc, _, rec := testService(t)
+	ctx := context.Background()
+	start := time.Date(2026, 10, 29, 15, 0, 0, 0, time.UTC)
+	svc.now = func() time.Time { return start }
+	if _, err := svc.Register(ctx, validRegister("minh@example.com")); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	verifyTok := tokenFromMail(t, rec.last())
+	if err := svc.VerifyEmail(ctx, verifyTok, "10.0.0.8"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if err := svc.ForgotPassword(ctx, "minh@example.com", "10.0.0.4"); err != nil {
+		t.Fatalf("forgot: %v", err)
+	}
+	resetTok := tokenFromMail(t, rec.last())
+	if err := svc.ResetPassword(ctx, verifyTok, "new-horse-battery-1", "10.0.0.6"); !errors.Is(err, ErrInvalidResetToken) {
+		t.Fatalf("verify purpose: %v", err)
+	}
+	svc.now = func() time.Time { return start.Add(2 * time.Hour) }
+	if err := svc.ResetPassword(ctx, resetTok, "new-horse-battery-1", "10.0.0.6"); !errors.Is(err, ErrInvalidResetToken) {
+		t.Fatalf("expired: %v", err)
+	}
+	var ve ValidationError
+	if err := svc.ResetPassword(ctx, "  ", "new-horse-battery-1", "10.0.0.6"); !errors.As(err, &ve) {
+		t.Fatalf("empty: %v", err)
+	}
+}
+
+func TestForgotRateLimit(t *testing.T) {
+	t.Parallel()
+	svc, _, _ := testService(t)
+	ctx := context.Background()
+	for i := 0; i < forgotEmailLim; i++ {
+		if err := svc.ForgotPassword(ctx, "minh@example.com", "10.0.0.4"); err != nil {
+			t.Fatalf("forgot %d: %v", i, err)
+		}
+	}
+	err := svc.ForgotPassword(ctx, "minh@example.com", "10.0.0.4")
+	var rl RateLimitError
+	if !errors.As(err, &rl) {
+		t.Fatalf("expected rate limit, got %v", err)
+	}
+}
+
+func TestChangePasswordRequiresCurrentAndRevokesOthers(t *testing.T) {
+	t.Parallel()
+	svc, _, rec := testService(t)
+	ctx := context.Background()
+	first, err := svc.Register(ctx, validRegister("minh@example.com"))
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := svc.VerifyEmail(ctx, tokenFromMail(t, rec.last()), "10.0.0.8"); err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	second, err := svc.Login(ctx, LoginInput{Email: "minh@example.com", Password: "correct-horse-battery", IP: "10.0.0.2"})
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	var ve ValidationError
+	if _, err := svc.ChangePassword(ctx, first.SessionID, "", "new-horse-battery-1", "10.0.0.3", "test"); !errors.As(err, &ve) {
+		t.Fatalf("missing current: %v", err)
+	}
+	if _, err := svc.ChangePassword(ctx, first.SessionID, "wrong-horse-battery", "new-horse-battery-1", "10.0.0.3", "test"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("wrong current: %v", err)
+	}
+	sid, err := svc.ChangePassword(ctx, first.SessionID, "correct-horse-battery", "new-horse-battery-1", "10.0.0.3", "test")
+	if err != nil {
+		t.Fatalf("change: %v", err)
+	}
+	if sid == "" || sid == first.SessionID {
+		t.Fatal("change should mint a new session")
+	}
+	if _, err := svc.Me(ctx, first.SessionID); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("old this-device session: %v", err)
+	}
+	if _, err := svc.Me(ctx, second.SessionID); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("other session: %v", err)
+	}
+	me, err := svc.Me(ctx, sid)
+	if err != nil || me.Email != "minh@example.com" {
+		t.Fatalf("new session: %v %+v", err, me)
+	}
+	if _, err := svc.Login(ctx, LoginInput{Email: "minh@example.com", Password: "correct-horse-battery", IP: "10.0.0.2"}); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("old password after change: %v", err)
+	}
+}
+
+func TestChangeAddPasswordWhenHashEmpty(t *testing.T) {
+	t.Parallel()
+	svc, users, _ := testService(t)
+	ctx := context.Background()
+	out, err := svc.Register(ctx, validRegister("minh@example.com"))
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := users.UpdatePasswordHash(ctx, out.User.ID, "", svc.now()); err != nil {
+		t.Fatalf("clear hash: %v", err)
+	}
+	var ve ValidationError
+	if _, err := svc.ChangePassword(ctx, out.SessionID, "something", "new-horse-battery-1", "10.0.0.3", "test"); !errors.As(err, &ve) {
+		t.Fatalf("current set while adding: %v", err)
+	}
+	sid, err := svc.ChangePassword(ctx, out.SessionID, "", "new-horse-battery-1", "10.0.0.3", "test")
+	if err != nil {
+		t.Fatalf("add password: %v", err)
+	}
+	if _, err := svc.Me(ctx, out.SessionID); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("old session: %v", err)
+	}
+	if _, err := svc.Login(ctx, LoginInput{Email: "minh@example.com", Password: "new-horse-battery-1", IP: "10.0.0.2"}); err != nil {
+		t.Fatalf("login with added password: %v", err)
+	}
+	_ = sid
+}
+
 func validRegister(email string) RegisterInput {
 	return RegisterInput{
 		Email:         email,
