@@ -2,7 +2,12 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { signInLabel, signOutLabel, signUpLabel } from "@/lib/copy";
+import {
+  changePasswordLink,
+  signInLabel,
+  signOutLabel,
+  signUpLabel,
+} from "@/lib/copy";
 
 import { AuthContext, type AuthState } from "./AuthProvider";
 import { SiteHeader } from "./SiteHeader";
@@ -33,6 +38,9 @@ describe("SiteHeader", () => {
       "href",
       "/signup",
     );
+    expect(
+      screen.queryByRole("link", { name: changePasswordLink }),
+    ).not.toBeInTheDocument();
   });
 
   it("signs out the current user", async () => {
@@ -47,6 +55,9 @@ describe("SiteHeader", () => {
       logout,
     });
     const user = userEvent.setup();
+    expect(
+      screen.getByRole("link", { name: changePasswordLink }),
+    ).toHaveAttribute("href", "/change-password");
     await user.click(screen.getByRole("button", { name: signOutLabel }));
     expect(logout).toHaveBeenCalledTimes(1);
   });
