@@ -38,6 +38,9 @@ func TestCreateGetDelete(t *testing.T) {
 	if rec.UserID != 99 {
 		t.Errorf("UserID = %d", rec.UserID)
 	}
+	if rec.Generation != 0 {
+		t.Errorf("Generation = %d, want 0 before bump", rec.Generation)
+	}
 	if rec.UserAgent != "vitest" || rec.IP != "127.0.0.1" {
 		t.Errorf("metadata = %+v", rec)
 	}
@@ -126,5 +129,69 @@ func TestCreateTruncatesUserAgent(t *testing.T) {
 	}
 	if len(rec.UserAgent) != maxUserAgent {
 		t.Fatalf("UserAgent len = %d, want %d", len(rec.UserAgent), maxUserAgent)
+	}
+}
+
+func TestBumpGenerationRevokesAllSessions(t *testing.T) {
+	t.Parallel()
+	s, mr := testStore(t)
+	ctx := context.Background()
+	a, err := s.Create(ctx, Record{UserID: 7})
+	if err != nil {
+		t.Fatalf("Create a: %v", err)
+	}
+	b, err := s.Create(ctx, Record{UserID: 7})
+	if err != nil {
+		t.Fatalf("Create b: %v", err)
+	}
+	other, err := s.Create(ctx, Record{UserID: 8})
+	if err != nil {
+		t.Fatalf("Create other: %v", err)
+	}
+
+	n, err := s.BumpGeneration(ctx, 7)
+	if err != nil {
+		t.Fatalf("Bump: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("gen = %d, want 1", n)
+	}
+	if _, err := s.Get(ctx, a); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Get a after bump: %v", err)
+	}
+	if _, err := s.Get(ctx, b); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Get b after bump: %v", err)
+	}
+	if _, err := s.Get(ctx, other); err != nil {
+		t.Fatalf("other user session: %v", err)
+	}
+	if mr.Exists("session:" + a) {
+		t.Fatal("stale session key should be deleted on Get")
+	}
+
+	fresh, err := s.Create(ctx, Record{UserID: 7})
+	if err != nil {
+		t.Fatalf("Create after bump: %v", err)
+	}
+	rec, err := s.Get(ctx, fresh)
+	if err != nil {
+		t.Fatalf("Get fresh: %v", err)
+	}
+	if rec.Generation != 1 {
+		t.Fatalf("fresh gen = %d, want 1", rec.Generation)
+	}
+}
+
+func TestBumpGenerationTwice(t *testing.T) {
+	t.Parallel()
+	s, _ := testStore(t)
+	ctx := context.Background()
+	n, err := s.BumpGeneration(ctx, 3)
+	if err != nil || n != 1 {
+		t.Fatalf("first bump: n=%d err=%v", n, err)
+	}
+	n, err = s.BumpGeneration(ctx, 3)
+	if err != nil || n != 2 {
+		t.Fatalf("second bump: n=%d err=%v", n, err)
 	}
 }

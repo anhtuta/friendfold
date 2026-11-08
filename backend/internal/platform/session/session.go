@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -15,6 +16,7 @@ import (
 
 const (
 	keyPrefix = "session:"
+	genPrefix = "session_gen:"
 	idBytes   = 32
 	// TTL is the idle/absolute lifetime of a session.
 	TTL = 30 * 24 * time.Hour
@@ -28,11 +30,12 @@ var ErrNotFound = errors.New("session: not found")
 
 // Record is the JSON value stored at session:{id}. Keep it well under 512 bytes.
 type Record struct {
-	UserID    int64     `json:"userId"`
-	CreatedAt time.Time `json:"createdAt"`
-	TouchedAt time.Time `json:"touchedAt"`
-	UserAgent string    `json:"userAgent"`
-	IP        string    `json:"ip"`
+	UserID     int64     `json:"userId"`
+	Generation int64     `json:"gen"`
+	CreatedAt  time.Time `json:"createdAt"`
+	TouchedAt  time.Time `json:"touchedAt"`
+	UserAgent  string    `json:"userAgent"`
+	IP         string    `json:"ip"`
 }
 
 // Store persists sessions in Redis.
@@ -58,6 +61,11 @@ func (s *Store) Create(ctx context.Context, rec Record) (string, error) {
 	}
 	rec.TouchedAt = now
 	rec.UserAgent = truncate(rec.UserAgent, maxUserAgent)
+	gen, err := s.currentGeneration(ctx, rec.UserID)
+	if err != nil {
+		return "", err
+	}
+	rec.Generation = gen
 	if err := s.set(ctx, id, rec, TTL); err != nil {
 		return "", err
 	}
@@ -79,6 +87,14 @@ func (s *Store) Get(ctx context.Context, id string) (Record, error) {
 	var rec Record
 	if err := json.Unmarshal(raw, &rec); err != nil {
 		return Record{}, fmt.Errorf("session decode: %w", err)
+	}
+	gen, err := s.currentGeneration(ctx, rec.UserID)
+	if err != nil {
+		return Record{}, err
+	}
+	if rec.Generation != gen {
+		_ = s.rdb.Del(ctx, keyPrefix+id).Err()
+		return Record{}, ErrNotFound
 	}
 	return rec, nil
 }
@@ -109,6 +125,32 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("session delete: %w", err)
 	}
 	return nil
+}
+
+// BumpGeneration increments session_gen:{userId}. Existing sessions whose
+// stored gen no longer matches are treated as missing on the next Get.
+// The generation key has no TTL: it must outlive any pre-bump session.
+func (s *Store) BumpGeneration(ctx context.Context, userID int64) (int64, error) {
+	n, err := s.rdb.Incr(ctx, genKey(userID)).Result()
+	if err != nil {
+		return 0, fmt.Errorf("session bump: %w", err)
+	}
+	return n, nil
+}
+
+func (s *Store) currentGeneration(ctx context.Context, userID int64) (int64, error) {
+	n, err := s.rdb.Get(ctx, genKey(userID)).Int64()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("session gen: %w", err)
+	}
+	return n, nil
+}
+
+func genKey(userID int64) string {
+	return genPrefix + strconv.FormatInt(userID, 10)
 }
 
 func (s *Store) set(ctx context.Context, id string, rec Record, ttl time.Duration) error {
