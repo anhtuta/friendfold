@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import {
   authLoadingLabel,
+  changePasswordLink,
   productName,
   signInLabel,
   signOutLabel,
@@ -33,6 +34,12 @@ export function SiteHeader() {
               <span className="text-muted">
                 {signedInPrefix} {user.displayName}
               </span>
+              <Link
+                href="/change-password"
+                className="text-accent underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                {changePasswordLink}
+              </Link>
               <button
                 type="button"
                 onClick={() => {

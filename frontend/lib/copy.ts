@@ -94,3 +94,13 @@ export const newPasswordLabel = "New password";
 export const confirmPasswordLabel = "Confirm new password";
 
 export const passwordMismatch = "Passwords do not match.";
+
+export const changePasswordHeading = "Change password";
+
+export const changePasswordSubmit = "Update password";
+
+export const changePasswordSuccess = "Your password has been updated.";
+
+export const changePasswordLink = "Change password";
+
+export const currentPasswordLabel = "Current password";

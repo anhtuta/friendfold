@@ -274,12 +274,12 @@ Decisions / deviations (phase 2):
 **Status:** In progress  
 **PR:** split into six stacked PRs (one concern each); merge **after** phase 2 (`main` includes #26–#31). Do not start from phase-2 feature branches. Merge order:
 
-1. docs (this PR) — phase-3 breakdown and decisions
-2. OpenAPI `POST /v1/auth/password/forgot`, `/reset`, `/change`
-3. platform session generation (`session_gen:{userId}`) so one `INCR` revokes every session
-4. auth module: forgot (verified-only mail), reset (consume + new hash + revoke all), change (current-password rule, re-issue this device)
-5. frontend `/forgot-password`, `/reset-password?token=`, login “Forgot password?”
-6. frontend `/change-password` and signed-in header link
+1. https://github.com/anhtuta/friendfold/pull/32 — docs (phase-3 breakdown and decisions)
+2. https://github.com/anhtuta/friendfold/pull/33 — OpenAPI `POST /v1/auth/password/forgot`, `/reset`, `/change`
+3. https://github.com/anhtuta/friendfold/pull/34 — platform session generation (`session_gen:{userId}`)
+4. https://github.com/anhtuta/friendfold/pull/35 — auth module: forgot / reset / change
+5. https://github.com/anhtuta/friendfold/pull/36 — frontend `/forgot-password`, `/reset-password`, login link
+6. https://github.com/anhtuta/friendfold/pull/37 — frontend `/change-password` and signed-in header link
 
 Work:
 
@@ -293,18 +293,18 @@ Work:
 
 Acceptance:
 
-- [ ] Forgot always 202 for eligible, unknown, and unverified addresses; mail is sent only for a live verified user.
-- [ ] Forgot is rate limited per IP and per email hash; 429 does not encode whether the email exists.
-- [ ] Reset with a valid token writes a new argon2id hash; the old password fails login.
-- [ ] Expired, reused, empty, malformed, and `verify_email`-purpose tokens are 400 (`invalid_token` or `validation_error` for empty) with the same public body.
-- [ ] Reset revokes **all** sessions for that user, including concurrent sessions on other devices; the reset response does not set a session.
-- [ ] A second forgot invalidates the previous unused `reset_password` token.
-- [ ] Change requires `currentPassword` when a password is set; wrong current password is 401 `invalid_credentials`.
-- [ ] Change with NULL `password_hash` and omitted `currentPassword` sets a password (add-password; covered in backend tests without Google).
-- [ ] Successful change keeps this device signed in (new session cookie) and invalidates every other session.
-- [ ] If session revoke (`INCR`) fails, the handler does not consume the token or write the new hash.
-- [ ] `/forgot-password`, `/reset-password`, `/change-password`, and the login forgot link are covered by frontend tests and dark-theme screenshots.
-- [ ] OpenAPI examples use `example-reset-token` (not high-entropy fakes). Tests mint secrets at runtime.
+- [x] Forgot always 202 for eligible, unknown, and unverified addresses; mail is sent only for a live verified user.
+- [x] Forgot is rate limited per IP and per email hash; 429 does not encode whether the email exists.
+- [x] Reset with a valid token writes a new argon2id hash; the old password fails login.
+- [x] Expired, reused, empty, malformed, and `verify_email`-purpose tokens are 400 (`invalid_token` or `validation_error` for empty) with the same public body.
+- [x] Reset revokes **all** sessions for that user, including concurrent sessions on other devices; the reset response does not set a session.
+- [x] A second forgot invalidates the previous unused `reset_password` token.
+- [x] Change requires `currentPassword` when a password is set; wrong current password is 401 `invalid_credentials`.
+- [x] Change with NULL `password_hash` and omitted `currentPassword` sets a password (add-password; covered in backend tests without Google).
+- [x] Successful change keeps this device signed in (new session cookie) and invalidates every other session.
+- [x] If session revoke (`INCR`) fails, the handler does not consume the token or write the new hash.
+- [x] `/forgot-password`, `/reset-password`, `/change-password`, and the login forgot link are covered by frontend tests and dark-theme screenshots.
+- [x] OpenAPI examples use `example-reset-token` (not high-entropy fakes). Tests mint secrets at runtime.
 
 Decisions / deviations (phase 3):
 
