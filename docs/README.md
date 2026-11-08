@@ -48,6 +48,14 @@ Architecture Decision Records. Write a new one when a choice is expensive to rev
 | [AGENTS.md](../AGENTS.md) | Canonical workflow for every agent |
 | [.cursor/rules/](../.cursor/rules/) | Same policies, scoped for Cursor |
 
+## Agent tooling
+
+Not part of the 01–09 product roadmap. These docs do not add user-facing surface.
+
+| Doc | What it is |
+| --- | --- |
+| [features/10-implement-task-skill.md](features/10-implement-task-skill.md) | Plan for the repo-local Cursor IDE skill that implements a named task or plan phase |
+
 ## Conventions used in these docs
 
 - **Status** on a feature: `Not started` → `In progress (phase N)` → `Shipped`.
