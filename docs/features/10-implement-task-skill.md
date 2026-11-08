@@ -79,7 +79,7 @@ Each phase is one PR. Do not start phase N+1 until N is shipped.
 ### Phase 1 — Add the project skill and a short pointer in docs
 
 **Status:** In progress  
-**PR:** this branch (open PR URL to be added when opened; not merged)
+**PR:** https://github.com/anhtuta/friendfold/pull/38 (open; not merged)
 
 Work:
 
