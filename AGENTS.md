@@ -23,6 +23,8 @@ New work starts by reading:
 - The relevant feature plan under [docs/features/](docs/features/)
 - Accepted ADRs in [docs/decisions/](docs/decisions/)
 
+**Cursor IDE (local Agent):** to implement a named task or the next plan phase without restating these rules, invoke **`/implement-task`** in Agent chat. Project skill: [`.cursor/skills/implement-task/SKILL.md`](.cursor/skills/implement-task/SKILL.md). Example (usage only — do not run it just because you read this file): `/implement-task Implement Accounts phase 4 according to docs/features/02-accounts.md`. Plan: [docs/features/10-implement-task-skill.md](docs/features/10-implement-task-skill.md).
+
 ## (b) Repo structure
 
 Monorepo. Do not create `frontend/` or `backend/` until feature 01 (project foundation) is being implemented.

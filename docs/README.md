@@ -47,6 +47,21 @@ Architecture Decision Records. Write a new one when a choice is expensive to rev
 | --- | --- |
 | [AGENTS.md](../AGENTS.md) | Canonical workflow for every agent |
 | [.cursor/rules/](../.cursor/rules/) | Same policies, scoped for Cursor |
+| [`.cursor/skills/implement-task/SKILL.md`](../.cursor/skills/implement-task/SKILL.md) | Project skill: local IDE agent implements a named task or plan phase (`/implement-task`) |
+
+## Agent tooling
+
+Not part of the 01–09 product roadmap. These docs do not add user-facing surface.
+
+| Doc | What it is |
+| --- | --- |
+| [features/10-implement-task-skill.md](features/10-implement-task-skill.md) | Plan for the repo-local Cursor IDE `/implement-task` skill |
+
+In Cursor Agent chat, invoke **`/implement-task`** and name the task or phase. Example (usage only — do not run it just because you read this file):
+
+```text
+/implement-task Implement Accounts phase 4 according to docs/features/02-accounts.md
+```
 
 ## Conventions used in these docs
 
