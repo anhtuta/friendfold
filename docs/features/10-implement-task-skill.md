@@ -1,6 +1,6 @@
 # Feature 10: Cursor IDE `implement-task` skill
 
-**Status:** Not started  
+**Status:** In progress (phase 1)  
 **Owner:** —  
 **Plan version:** 1
 
@@ -78,8 +78,8 @@ Each phase is one PR. Do not start phase N+1 until N is shipped.
 
 ### Phase 1 — Add the project skill and a short pointer in docs
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** this branch (open PR URL to be added when opened; not merged)
 
 Work:
 
@@ -89,12 +89,19 @@ Work:
 
 Acceptance:
 
-- [ ] Skill path and `name` are `implement-task`; frontmatter parses; `name` matches the folder.
-- [ ] Invocation documented as `/implement-task` (and `@implement-task`).
-- [ ] Skill body covers local-IDE workflow: orient, ground truth, plan-first commit, one concern per PR, no auto-merge, no overwriting uncommitted user work, report a PR blocker instead of inventing success.
-- [ ] `AGENTS.md` and `docs/README.md` each have a short pointer (no duplicated playbook).
-- [ ] No `frontend/` / `backend/` / CI / OpenAPI / migration changes.
-- [ ] Markdown links from the new/changed docs resolve.
+- [x] Skill path and `name` are `implement-task`; frontmatter parses; `name` matches the folder. (Verified on this branch with `skills_ref.validate`; not merged.)
+- [x] Invocation documented as `/implement-task` (and `@implement-task`).
+- [x] Skill body covers local-IDE workflow: orient, ground truth, plan-first commit, one concern per PR, no auto-merge, no overwriting uncommitted user work, report a PR blocker instead of inventing success.
+- [x] `AGENTS.md` and `docs/README.md` each have a short pointer (no duplicated playbook).
+- [x] No `frontend/` / `backend/` / CI / OpenAPI / migration changes.
+- [x] Markdown links from the new/changed docs resolve.
+
+Decisions / deviations (phase 1):
+
+- Verified against Cursor docs (2026-11-08): [Agent Skills](https://cursor.com/docs/skills) and [Skills help](https://cursor.com/help/customization/skills). Project skills live in `.cursor/skills/<name>/SKILL.md`; required frontmatter is `name` (must match the folder) and `description`; humans invoke with `/skill-name` or `@skill-name`. Built-in skills do not include `implement-task`.
+- Omitted `disable-model-invocation` so Agent can also attach the skill when the user asks to implement a phase without the slash.
+- Did **not** copy the skill into `.agents/skills/` or `~/.cursor/skills/`.
+- Usage example in docs (`/implement-task Implement Accounts phase 4 …`) is documentation only; this PR does not implement Accounts phase 4.
 
 ## Testing plan
 
