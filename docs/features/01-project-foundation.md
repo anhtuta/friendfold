@@ -47,7 +47,7 @@ Stand up the skeleton every later feature depends on: a compilable Go API, a run
 | F-01-04 | `GET /v1/ready` returns `200` when Postgres and Redis ping succeed, `503` otherwise. |
 | F-01-05 | goose can apply migrations against Compose Postgres; a `platform` ping is enough (no product tables yet). |
 | F-01-06 | Next.js starts on a configurable port (default `3000`), TypeScript `strict` true. |
-| F-01-07 | Compose publishes Postgres `5432`, Redis `6379`, Mailpit SMTP `1025` and UI `8025`. |
+| F-01-07 | Compose publishes Postgres host `5435` (container `5432`), Redis host `6377` (container `6379`), Mailpit SMTP `1025` and UI `8025`. Host ports avoid colliding with a local Postgres/Redis. |
 | F-01-08 | OpenAPI 3.1 spec validates and includes health, ready, and the error schema. |
 | F-01-09 | CI runs on PRs and on `main`. |
 | F-01-10 | `internal/platform/id` (or equivalent) generates Snowflake IDs; covered by a unit test (monotonic in-process, worker ID honored). |
@@ -162,7 +162,7 @@ Local run (through phase 2; Next.js is phase 3):
 docker compose up -d
 cd backend
 go run github.com/pressly/goose/v3/cmd/goose@v3.24.3 -dir db/migrations postgres \
-  "postgres://friendfold:friendfold@127.0.0.1:5432/friendfold?sslmode=disable" up
+  "postgres://friendfold:friendfold@127.0.0.1:5435/friendfold?sslmode=disable" up
 CGO_ENABLED=0 go test ./...
 CGO_ENABLED=0 go build -o /tmp/friendfold-api ./cmd/api
 API_ADDR=:8080 go run ./cmd/api
@@ -211,7 +211,7 @@ Local run (through phase 3; CI is phase 4):
 docker compose up -d
 cd backend
 go run github.com/pressly/goose/v3/cmd/goose@v3.24.3 -dir db/migrations postgres \
-  "postgres://friendfold:friendfold@127.0.0.1:5432/friendfold?sslmode=disable" up
+  "postgres://friendfold:friendfold@127.0.0.1:5435/friendfold?sslmode=disable" up
 API_ADDR=:8080 go run ./cmd/api
 # other terminal:
 cd frontend
@@ -249,7 +249,7 @@ Work:
 
 - Finish `backend/api/openapi.yaml` (error envelope, health, ready).
 - GitHub Actions: backend tests + golangci-lint (or `go vet` + `gofmt` check if lint config is too much for this PR — prefer golangci-lint), frontend typecheck + build, optional Spectral/Redocly on the spec.
-- README **must not** be rewritten here (owned elsewhere); put run instructions in `docs/features/01-project-foundation.md` (a "Local run" subsection added in this phase) or a `docs/dev-setup.md` if the PR wants a dedicated page — prefer a **Local run** section at the bottom of this file to avoid extra docs sprawl.
+- README **must not** be rewritten here (owned elsewhere); put run instructions in `docs/features/01-project-foundation.md` (a "Local run" subsection added in this phase) or a `docs/dev-setup.md` if the PR wants a dedicated page — prefer a **Local run** section at the bottom of this file to avoid extra docs sprawl. Extracted later to [docs/deployment/deployment-local.md](../deployment/deployment-local.md) ([feature 11](11-local-dev-tooling.md)).
 
 Acceptance:
 
@@ -257,7 +257,7 @@ Acceptance:
 - [x] Spec validates.
 - [x] This plan's Status becomes **Shipped** when this phase merges; add Local run commands.
 
-Local run (whole stack, including CI checks): see **Local run** at the bottom of this file.
+Local run (whole stack, including CI checks): [docs/deployment/deployment-local.md](../deployment/deployment-local.md) (`make help`).
 
 Decisions / deviations:
 
@@ -287,36 +287,4 @@ Decisions / deviations:
 
 ## Local run
 
-Copy `.env.example` to `.env` only when you need to override defaults. Compose Postgres password is local-only.
-
-```bash
-docker compose up -d
-
-cd backend
-go run github.com/pressly/goose/v3/cmd/goose@v3.24.3 -dir db/migrations postgres \
-  "postgres://friendfold:friendfold@127.0.0.1:5432/friendfold?sslmode=disable" up
-CGO_ENABLED=0 go test ./...
-golangci-lint run --config .golangci.yml ./...
-GOTOOLCHAIN=auto go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 diff
-CGO_ENABLED=0 go build -o /tmp/friendfold-api ./cmd/api
-API_ADDR=:8080 go run ./cmd/api
-# GET http://localhost:8080/v1/health  →  {"status":"ok"}
-# GET http://localhost:8080/v1/ready   →  {"status":"ok"} when Compose is up
-# mailpit UI: http://localhost:8025
-
-# other terminal:
-cd frontend
-npm install
-npm run typecheck
-npm test
-npm run lint
-npm run build
-npm run dev
-# http://localhost:3000       → Friendfold / Into the fold of friends.
-# http://localhost:3000/health → OK when the API ready check succeeds
-
-# from repo root:
-npx --yes @redocly/cli@1.34.5 lint --config redocly.yaml
-```
-
-`WEB_ORIGIN` (API CORS allowlist) defaults to `http://localhost:3000`. `API_BASE_URL` (Next.js server → Go API) defaults to `http://localhost:8080`. `PORT` is Next.js's usual process env (default `3000`). `DATABASE_URL`, `DATABASE_READ_URL`, and `REDIS_URL` default to the local Compose endpoints.
+Commands, ports, env defaults, and troubleshooting: [docs/deployment/deployment-local.md](../deployment/deployment-local.md). From the repo root, `make help`.

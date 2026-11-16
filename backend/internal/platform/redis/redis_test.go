@@ -13,7 +13,7 @@ func TestNewRejectsInvalidURL(t *testing.T) {
 
 func TestNewAcceptsRedisURL(t *testing.T) {
 	t.Parallel()
-	c, err := New("redis://127.0.0.1:6379/0")
+	c, err := New("redis://127.0.0.1:6377/0")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

@@ -113,7 +113,7 @@ Do **not** hardcode tool versions from memory. Current pins live in:
 - `frontend/package.json` / `package-lock.json` — `dev`, `test`, `lint`, `typecheck`, `build`, `openapi:types`
 - `backend/go.mod`, `backend/.golangci.yml`, `backend/sqlc.yaml`
 - `.github/workflows/*.yml` — CI Go, Node, golangci-lint, sqlc, Redocly versions
-- `docs/features/01-project-foundation.md` **Local run** — Compose, goose, API, web; treat as hints and prefer the files above if they disagree
+- `docs/deployment/deployment-local.md` and the root `Makefile` — Compose, goose, API, web; treat as hints and prefer the files above if they disagree
 
 Run the checks that match what you changed. Docs-only changes still go through existing CI; do not add skip hacks.
 

@@ -33,8 +33,8 @@ const (
 	defaultWorkerID  = uint16(1)
 	defaultWebOrigin = "http://localhost:3000"
 	// Local Compose credentials (docker-compose.yml). Not for production.
-	defaultDatabaseURL = "postgres://friendfold:friendfold@127.0.0.1:5432/friendfold?sslmode=disable"
-	defaultRedisURL    = "redis://127.0.0.1:6379/0"
+	defaultDatabaseURL = "postgres://friendfold:friendfold@127.0.0.1:5435/friendfold?sslmode=disable"
+	defaultRedisURL    = "redis://127.0.0.1:6377/0"
 	defaultPGXMaxConns = int32(10)
 	// Local Mailpit (docker-compose.yml). Not for production.
 	defaultSMTPHost = "127.0.0.1"

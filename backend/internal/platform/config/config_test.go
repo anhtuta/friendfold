@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -69,6 +70,16 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.SMTPUsername != "" || cfg.SMTPPassword != "" {
 		t.Error("SMTP auth should be empty by default")
+	}
+}
+
+func TestLoadDefaultsUseComposeHostPorts(t *testing.T) {
+	t.Parallel()
+	if !strings.Contains(defaultDatabaseURL, "127.0.0.1:5435/") {
+		t.Errorf("defaultDatabaseURL = %q, want host port 5435", defaultDatabaseURL)
+	}
+	if !strings.Contains(defaultRedisURL, "127.0.0.1:6377/") {
+		t.Errorf("defaultRedisURL = %q, want host port 6377", defaultRedisURL)
 	}
 }
 

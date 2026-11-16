@@ -133,4 +133,6 @@ If you change behavior, endpoints, schema, or a decision, update the matching fe
 
 ## Local development (once foundation exists)
 
-Docker Compose runs Postgres, Redis, and Mailpit. The Go API and Next.js app run on the host (or in Compose once that is wired). Never point a development workflow at a production database.
+See [docs/deployment/deployment-local.md](docs/deployment/deployment-local.md). `make help` lists targets.
+
+Docker Compose runs Postgres (host **5435**), Redis (host **6377**), and Mailpit. The Go API and Next.js app run on the host (or in Compose once that is wired). Never point a development workflow at a production database.
