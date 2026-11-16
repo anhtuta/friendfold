@@ -76,7 +76,7 @@ Host port remap is local-only. Production bind addresses stay in env, not in Com
 ### Phase 1 — Guide, host ports, Makefile
 
 **Status:** In progress  
-**PR:** —
+**PR:** https://github.com/anhtuta/friendfold/pull/39
 
 Work:
 
@@ -87,10 +87,10 @@ Work:
 
 Acceptance:
 
-- [ ] `make help` lists targets; dry-run of non-interactive targets matches the guide.
-- [ ] `go test ./...` (backend) and frontend checks that match CI still pass.
-- [ ] Relative markdown links in the new/changed docs resolve.
-- [ ] CI does not start using host `5432`/`6379` (it did not before).
+- [x] `make help` lists targets; dry-run of non-interactive targets matches the guide.
+- [x] `go test ./...` (backend) and frontend checks that match CI still pass.
+- [x] Relative markdown links in the new/changed docs resolve.
+- [x] CI does not start using host `5432`/`6379` (it did not before).
 
 ## Testing plan
 
