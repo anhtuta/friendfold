@@ -43,20 +43,20 @@ help: ## List targets
 		'' \
 		'Apps' \
 		'  api, backend    go run ./cmd/api (host :8080)' \
-		'  frontend        npm install && npm run dev (host :3000)' \
+		'  frontend        pnpm install && pnpm dev (host :3000)' \
 		'  dev             up + migrate, then api and frontend together' \
 		'' \
 		'Checks' \
 		'  test            Backend + frontend tests' \
 		'  test-backend    CGO_ENABLED=0 go test ./...' \
-		'  test-frontend   frontend npm test' \
+		'  test-frontend   frontend pnpm test' \
 		'  lint            golangci-lint, ESLint, OpenAPI' \
 		'  lint-backend    golangci-lint $(GOLANGCI_VERSION)' \
-		'  lint-frontend   frontend npm run lint' \
+		'  lint-frontend   frontend pnpm lint' \
 		'  openapi         Redocly CLI $(REDOCLY_VERSION)' \
 		'  sqlc            sqlc $(SQLC_VERSION) generate' \
 		'  sqlc-diff       sqlc diff (CI check)' \
-		'  typecheck       frontend npm run typecheck'
+		'  typecheck       frontend pnpm typecheck'
 
 up: ## Start Compose services
 	$(COMPOSE) up -d
@@ -79,7 +79,7 @@ api: ## Run the Go API on the host
 backend: api ## Alias for api
 
 frontend: ## Install JS deps and run Next.js
-	cd frontend && npm install && npm run dev
+	cd frontend && pnpm install && pnpm dev
 
 dev: ## Compose + migrate + API and Next.js
 	$(MAKE) up
@@ -92,7 +92,7 @@ test-backend: ## Go tests
 	cd backend && CGO_ENABLED=0 go test ./...
 
 test-frontend: ## Frontend unit tests
-	cd frontend && npm install && npm test
+	cd frontend && pnpm install && pnpm test
 
 lint: lint-backend lint-frontend openapi ## Lint Go, frontend, and OpenAPI
 
@@ -100,7 +100,7 @@ lint-backend: ## golangci-lint (CI pin)
 	cd backend && GOTOOLCHAIN=$(GOTOOLCHAIN) $(GOLANGCI_LINT) run --config .golangci.yml ./...
 
 lint-frontend: ## ESLint
-	cd frontend && npm install && npm run lint
+	cd frontend && pnpm install && pnpm lint
 
 openapi: ## Lint OpenAPI spec
 	npx --yes @redocly/cli@$(REDOCLY_VERSION) lint --config redocly.yaml
@@ -112,4 +112,4 @@ sqlc-diff: ## Fail if generated sqlc code is stale
 	cd backend && GOTOOLCHAIN=$(GOTOOLCHAIN) $(SQLC) diff
 
 typecheck: ## Frontend typecheck
-	cd frontend && npm install && npm run typecheck
+	cd frontend && pnpm install && pnpm typecheck

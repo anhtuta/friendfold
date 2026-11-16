@@ -66,6 +66,7 @@ Not part of the 01–09 product roadmap. These docs do not add user-facing surfa
 | --- | --- |
 | [features/10-implement-task-skill.md](features/10-implement-task-skill.md) | Plan for the repo-local Cursor IDE `/implement-task` skill |
 | [features/11-local-dev-tooling.md](features/11-local-dev-tooling.md) | Plan for the local Makefile, remapped Compose host ports, and `docs/deployment/` |
+| [features/12-frontend-pnpm.md](features/12-frontend-pnpm.md) | Switch the Next.js app from npm to pnpm (Corepack) |
 
 In Cursor Agent chat, invoke **`/implement-task`** and name the task or phase. Example (usage only — do not run it just because you read this file):
 

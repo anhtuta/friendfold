@@ -24,18 +24,22 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
+          package_json_file: frontend/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: npm ci
-        run: npm ci
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
       - name: typecheck
-        run: npm run typecheck
+        run: pnpm typecheck
       - name: test
-        run: npm test
+        run: pnpm test
       - name: lint
-        run: npm run lint
+        run: pnpm lint
       - name: build
-        run: npm run build
+        run: pnpm build
