@@ -56,7 +56,7 @@ N/A.
 ### Phase 1 — Switch `frontend/` to pnpm
 
 **Status:** In progress  
-**PR:** —
+**PR:** https://github.com/anhtuta/friendfold/pull/40
 
 Work: lockfile import, Corepack pin, npm/yarn guard, CI, Makefile, docs.
 
