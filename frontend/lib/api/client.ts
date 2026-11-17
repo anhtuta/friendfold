@@ -5,6 +5,7 @@ import { publicApiBaseUrl } from "@/lib/publicApiBaseUrl";
 export type User = components["schemas"]["User"];
 export type MeProfile = components["schemas"]["MeProfile"];
 export type PublicProfile = components["schemas"]["PublicProfile"];
+export type PatchProfileRequest = components["schemas"]["PatchProfileRequest"];
 export type RegisterRequest = components["schemas"]["RegisterRequest"];
 export type LoginRequest = components["schemas"]["LoginRequest"];
 export type VerifyEmailRequest = components["schemas"]["VerifyEmailRequest"];
@@ -75,4 +76,17 @@ export async function fetchPublicProfile(
     throw new Error(await readErrorMessage(res));
   }
   return (await res.json()) as PublicProfile;
+}
+
+export async function patchMyProfile(
+  body: PatchProfileRequest,
+): Promise<MeProfile> {
+  const res = await apiFetch("/v1/me/profile", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  return (await res.json()) as MeProfile;
 }

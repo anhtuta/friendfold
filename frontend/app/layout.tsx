@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import { SiteHeader } from "@/components/SiteHeader";
 import { UnverifiedEmailBanner } from "@/components/UnverifiedEmailBanner";
+import { UsernameGate } from "@/components/UsernameGate";
 
 import "./globals.css";
 
@@ -25,9 +26,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         className={`${inter.className} min-h-screen bg-background text-foreground antialiased`}
       >
         <AuthProvider>
-          <SiteHeader />
-          <UnverifiedEmailBanner />
-          {children}
+          <UsernameGate>
+            <SiteHeader />
+            <UnverifiedEmailBanner />
+            {children}
+          </UsernameGate>
         </AuthProvider>
       </body>
     </html>

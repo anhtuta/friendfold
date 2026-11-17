@@ -115,3 +115,27 @@ export const profileNotFoundBody =
   "This username is not on Friendfold.";
 
 export const profileHandlePrefix = "@";
+
+export const settingsNavLabel = "Settings";
+
+export const onboardingUsernameHeading = "Choose a username";
+
+export const onboardingUsernameBody =
+  "This is how friends find you. You can change it later, at most once every 14 days.";
+
+export const onboardingUsernameSubmit = "Continue";
+
+export const usernameLabel = "Username";
+
+export const settingsProfileHeading = "Edit profile";
+
+export const settingsProfileSubmit = "Save profile";
+
+export const settingsProfileSaved = "Profile saved.";
+
+export const bioLabel = "Bio";
+
+export const usernameCooldownMessage =
+  "You can change your username again after the 14-day cooldown.";
+
+export const usernameHint = "3–20 characters: lowercase letters, numbers, and underscores.";

@@ -7,6 +7,7 @@ import {
   changePasswordLink,
   productName,
   profileNavLabel,
+  settingsNavLabel,
   signInLabel,
   signOutLabel,
   signUpLabel,
@@ -36,12 +37,20 @@ export function SiteHeader() {
                 {signedInPrefix} {user.displayName}
               </span>
               {profile?.username ? (
-                <Link
-                  href={`/u/${profile.username}`}
-                  className="text-accent underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                >
-                  {profileNavLabel}
-                </Link>
+                <>
+                  <Link
+                    href={`/u/${profile.username}`}
+                    className="text-accent underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  >
+                    {profileNavLabel}
+                  </Link>
+                  <Link
+                    href="/settings/profile"
+                    className="text-accent underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  >
+                    {settingsNavLabel}
+                  </Link>
+                </>
               ) : null}
               <Link
                 href="/change-password"
