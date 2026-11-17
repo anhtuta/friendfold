@@ -339,7 +339,7 @@ Acceptance:
 ### Phase 3 — Object storage platform
 
 **Status:** In progress  
-**PR:** (stacked; URL filled when the PR opens)
+**PR:** https://github.com/anhtuta/friendfold/pull/46 (after https://github.com/anhtuta/friendfold/pull/45)
 
 Work:
 
