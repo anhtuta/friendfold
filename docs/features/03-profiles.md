@@ -304,7 +304,7 @@ Each phase is **one PR**, one concern. Stack on the previous branch; merge **in 
 ### Phase 1 — OpenAPI contract
 
 **Status:** In progress  
-**PR:** (stacked on https://github.com/anhtuta/friendfold/pull/42; URL filled when this PR opens)
+**PR:** https://github.com/anhtuta/friendfold/pull/43 (after https://github.com/anhtuta/friendfold/pull/42)
 
 Work:
 
