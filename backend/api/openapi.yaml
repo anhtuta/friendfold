@@ -15,9 +15,10 @@ info:
     Platform probes are public (`security: []`). User operations authenticate
     with `cookieAuth` (cookie `friendfold_session`).
 
-    Mutating `/v1/auth/*` requests must send `Origin` matching `WEB_ORIGIN`.
-    Login and register send credentials in the JSON body, then set the session
-    cookie. Logout and other cookie-authenticated writes also require Origin.
+    Mutating `/v1/auth/*` and `/v1/me/profile*` requests must send `Origin`
+    matching `WEB_ORIGIN`. Login and register send credentials in the JSON
+    body, then set the session cookie. Logout and other cookie-authenticated
+    writes also require Origin.
 
     Every response includes `X-Request-Id` (echoed from the client when valid,
     otherwise generated).
@@ -29,6 +30,8 @@ tags:
     description: Process liveness and dependency readiness. No product data.
   - name: auth
     description: Email/password accounts, email verification, password reset, and server-side sessions.
+  - name: profile
+    description: Username, display name, bio, avatar, and cover. Public profiles and own-profile edits.
 security: []
 paths:
   /v1/health:
@@ -444,6 +447,336 @@ paths:
           $ref: "#/components/responses/OriginMismatch"
         "429":
           $ref: "#/components/responses/RateLimited"
+  /v1/me/profile:
+    get:
+      operationId: getMyProfile
+      tags:
+        - profile
+      summary: Own profile
+      description: |
+        Returns the signed-in user's profile, including email and
+        `emailVerified`. Creates an empty `profiles` row when none exists
+        (`username` is then null until onboarding).
+
+        Date of birth is never included. Requires a valid session cookie.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Owner profile
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeProfile"
+              examples:
+                onboarded:
+                  value:
+                    id: "193848201234567890"
+                    username: minh
+                    displayName: Minh
+                    bio: Into the fold of friends.
+                    avatarUrl: http://localhost:8080/v1/media/profile/193848201234567890/avatar/example-object.jpg
+                    coverUrl: null
+                    email: minh@example.com
+                    emailVerified: true
+                    usernameChangedAt: "2026-11-01T12:00:00Z"
+                needsUsername:
+                  value:
+                    id: "193848201234567890"
+                    username: null
+                    displayName: Minh
+                    bio: ""
+                    avatarUrl: null
+                    coverUrl: null
+                    email: minh@example.com
+                    emailVerified: false
+                    usernameChangedAt: null
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    patch:
+      operationId: patchMyProfile
+      tags:
+        - profile
+      summary: Update own profile text fields
+      description: |
+        Updates display name, bio, and/or username. Avatar and cover are
+        separate upload endpoints. Unknown JSON fields are rejected. At least
+        one field is required.
+
+        Username is 3–20 characters `[a-z0-9_]`, stored lowercase. Reserved
+        names are 400 `username_reserved`. Taken names are 409
+        `username_taken`. A change within 14 days of the last successful
+        username write is 409 `username_cooldown`. Repeating the current
+        username is a no-op and does not refresh the cooldown.
+
+        Rate limited per user. Origin must match `WEB_ORIGIN`.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchProfileRequest"
+            examples:
+              bio:
+                value:
+                  displayName: Minh
+                  bio: Hello from Friendfold.
+                  username: minh
+      responses:
+        "200":
+          description: Updated owner profile
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeProfile"
+        "400":
+          $ref: "#/components/responses/ProfilePatchError"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "409":
+          $ref: "#/components/responses/ProfileConflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/me/profile/avatar:
+    post:
+      operationId: uploadMyAvatar
+      tags:
+        - profile
+      summary: Upload avatar
+      description: |
+        Multipart field `file`. JPEG, PNG, or WebP only; GIF/PDF/SVG rejected.
+        Client `Content-Type` and filename are not trusted. Max 5 MiB.
+
+        The server transcodes to JPEG (quality 85), strips EXIF, and resizes
+        so the long edge is at most 1024. Replaces any previous avatar.
+
+        Rate limited per user. Origin must match `WEB_ORIGIN`.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ProfileImageUpload"
+      responses:
+        "200":
+          description: Avatar stored; owner profile returned
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeProfile"
+        "400":
+          $ref: "#/components/responses/InvalidImage"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    delete:
+      operationId: deleteMyAvatar
+      tags:
+        - profile
+      summary: Remove avatar
+      description: |
+        Clears the avatar. The UI then shows initials. Origin must match
+        `WEB_ORIGIN`.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Avatar cleared; owner profile returned
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeProfile"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/me/profile/cover:
+    post:
+      operationId: uploadMyCover
+      tags:
+        - profile
+      summary: Upload cover photo
+      description: |
+        Multipart field `file`. JPEG, PNG, or WebP only. Max 10 MiB. Same
+        sniffing and transcode as avatar; long edge at most 2048.
+
+        Rate limited per user. Origin must match `WEB_ORIGIN`.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ProfileImageUpload"
+      responses:
+        "200":
+          description: Cover stored; owner profile returned
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeProfile"
+        "400":
+          $ref: "#/components/responses/InvalidImage"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    delete:
+      operationId: deleteMyCover
+      tags:
+        - profile
+      summary: Remove cover photo
+      description: |
+        Clears the cover photo. Origin must match `WEB_ORIGIN`.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Cover cleared; owner profile returned
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeProfile"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/OriginMismatch"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/users/{username}:
+    get:
+      operationId: getUserProfile
+      tags:
+        - profile
+      summary: Public profile by username
+      description: |
+        Returns public profile fields for a username (case-insensitive).
+        Session cookie is optional.
+
+        Never includes email, `emailVerified`, date of birth, or
+        `usernameChangedAt`. Unknown usernames, deleted accounts, and
+        blocked viewer/owner pairs (once friends/blocks exist) all return
+        404 `not_found` with the same body.
+
+        Rate limited per IP.
+      security: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          description: |
+            3–20 characters `[A-Za-z0-9_]`. Stored and compared lowercase.
+          schema:
+            $ref: "#/components/schemas/Username"
+          example: minh
+      responses:
+        "200":
+          description: Public profile
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicProfile"
+              examples:
+                minh:
+                  value:
+                    id: "193848201234567890"
+                    username: minh
+                    displayName: Minh
+                    bio: Into the fold of friends.
+                    avatarUrl: http://localhost:8080/v1/media/profile/193848201234567890/avatar/example-object.jpg
+                    coverUrl: null
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/ProfileNotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/media/{key}:
+    get:
+      operationId: getMediaObject
+      tags:
+        - profile
+      summary: Fetch a stored image
+      description: |
+        Streams object bytes when `MEDIA_PUBLIC_BASE_URL` points at this API
+        (local `fs` driver). Production CDNs serve the same keys from the
+        bucket instead.
+
+        `key` is the server-minted object key
+        (`profile/{userId}/{kind}/{snowflake}.jpg`). Path traversal and
+        unknown keys are 404. Public; no session.
+      security: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: |
+            Object key. Slashes are part of the key. Example values are
+            fake (`example-object`), not production identifiers.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 256
+            pattern: "^profile/[0-9]+/(avatar|cover)/[A-Za-z0-9-]+\\.jpg$"
+          example: profile/193848201234567890/avatar/example-object.jpg
+      responses:
+        "200":
+          description: JPEG bytes
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              schema:
+                type: string
+                example: public, max-age=31536000, immutable
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/ProfileNotFound"
 components:
   securitySchemes:
     cookieAuth:
@@ -676,6 +1009,109 @@ components:
                 error:
                   code: rate_limited
                   message: Too many attempts. Try again later
+    ProfileNotFound:
+      description: |
+        Profile is missing, the account is deleted, or the viewer is blocked.
+        Same body in every case (no existence leak).
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            missing:
+              value:
+                error:
+                  code: not_found
+                  message: Profile not found
+    ProfilePatchError:
+      description: |
+        PATCH body failed. `error.code` is `validation_error`,
+        `username_invalid`, or `username_reserved`.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            invalid:
+              value:
+                error:
+                  code: validation_error
+                  message: Request is invalid
+            username:
+              value:
+                error:
+                  code: username_invalid
+                  message: Username must be 3–20 characters [a-z0-9_]
+            reserved:
+              value:
+                error:
+                  code: username_reserved
+                  message: This username is not available
+    ProfileConflict:
+      description: |
+        Username cannot be applied. `error.code` is `username_taken` or
+        `username_cooldown`.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            taken:
+              value:
+                error:
+                  code: username_taken
+                  message: Username is already taken
+            cooldown:
+              value:
+                error:
+                  code: username_cooldown
+                  message: Username can be changed again after the 14-day cooldown
+    InvalidImage:
+      description: |
+        Upload failed type, magic-byte, decode, or pixel-cap checks.
+        `error.code` is `invalid_image` or `validation_error` (missing file).
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            type:
+              value:
+                error:
+                  code: invalid_image
+                  message: Image must be JPEG, PNG, or WebP
+            missing:
+              value:
+                error:
+                  code: validation_error
+                  message: file is required
+    PayloadTooLarge:
+      description: Avatar over 5 MiB or cover over 10 MiB
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            large:
+              value:
+                error:
+                  code: payload_too_large
+                  message: File is too large
   schemas:
     HealthResponse:
       type: object
@@ -857,3 +1293,125 @@ components:
           minLength: 8
           maxLength: 72
           description: 8–72 bytes; must not equal the account email.
+    Username:
+      type: string
+      minLength: 3
+      maxLength: 20
+      pattern: "^[A-Za-z0-9_]+$"
+      description: |
+        3–20 characters `[A-Za-z0-9_]`. Stored lowercase. Path lookup is
+        case-insensitive.
+    PublicProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - username
+        - displayName
+        - bio
+        - avatarUrl
+        - coverUrl
+      properties:
+        id:
+          $ref: "#/components/schemas/SnowflakeId"
+        username:
+          $ref: "#/components/schemas/Username"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        bio:
+          type: string
+          maxLength: 160
+        avatarUrl:
+          type:
+            - string
+            - "null"
+          format: uri
+          maxLength: 2048
+          description: Absolute URL composed from MEDIA_PUBLIC_BASE_URL + object key.
+        coverUrl:
+          type:
+            - string
+            - "null"
+          format: uri
+          maxLength: 2048
+    MeProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - username
+        - displayName
+        - bio
+        - avatarUrl
+        - coverUrl
+        - email
+        - emailVerified
+        - usernameChangedAt
+      properties:
+        id:
+          $ref: "#/components/schemas/SnowflakeId"
+        username:
+          type:
+            - string
+            - "null"
+          minLength: 3
+          maxLength: 20
+          pattern: "^[A-Za-z0-9_]+$"
+          description: Null until the owner claims a username.
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        bio:
+          type: string
+          maxLength: 160
+        avatarUrl:
+          type:
+            - string
+            - "null"
+          format: uri
+          maxLength: 2048
+        coverUrl:
+          type:
+            - string
+            - "null"
+          format: uri
+          maxLength: 2048
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        emailVerified:
+          type: boolean
+        usernameChangedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: UTC time of the last successful username write.
+    PatchProfileRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        bio:
+          type: string
+          maxLength: 160
+        username:
+          $ref: "#/components/schemas/Username"
+    ProfileImageUpload:
+      type: object
+      additionalProperties: false
+      required:
+        - file
+      properties:
+        file:
+          type: string
+          format: binary
+          description: JPEG, PNG, or WebP image. Field name is `file`.
