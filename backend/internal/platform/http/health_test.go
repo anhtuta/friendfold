@@ -161,8 +161,8 @@ func TestCORSAllowsCredentialsAndPOST(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
 		t.Errorf("Allow-Credentials = %q", got)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, "POST") {
-		t.Errorf("Allow-Methods = %q, want POST", got)
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, "POST") || !strings.Contains(got, "PATCH") || !strings.Contains(got, "DELETE") {
+		t.Errorf("Allow-Methods = %q, want POST PATCH DELETE", got)
 	}
 }
 

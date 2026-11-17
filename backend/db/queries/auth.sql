@@ -72,3 +72,8 @@ WHERE token_hash = $1
 UPDATE users
 SET password_hash = $2, updated_at = $3
 WHERE id = $1 AND deleted_at IS NULL;
+
+-- name: UpdateDisplayName :execrows
+UPDATE users
+SET display_name = $2, updated_at = $3
+WHERE id = $1 AND deleted_at IS NULL;
