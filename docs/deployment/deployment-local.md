@@ -13,7 +13,7 @@ From the repo root, `make help` lists targets. This page uses those targets.
 | Git | any recent | |
 | Docker Engine + Compose v2 | `docker compose` (plugin) | Postgres 16, Redis 7, Mailpit images |
 | Go | **1.22+** module (`backend/go.mod`); CI uses **1.24.x** | goose v3.24.3 and sqlc v1.29.0 auto-select a newer compiler via `GOTOOLCHAIN=auto` |
-| Node.js + npm | **22** (CI) | `frontend/package-lock.json` |
+| Node.js **22** + pnpm **12.18.0** | CI Node 22; Corepack pin in `frontend/package.json` | `frontend/pnpm-lock.yaml`. `corepack enable` then `corepack prepare pnpm@12.18.0 --activate`. Do not use npm/yarn in `frontend/`. |
 | GNU make | macOS 3.81 or Linux 4.x | `make help` is the default target |
 
 Optional: copy `.env.example` to `.env` only when you need to override defaults. The Compose Postgres password is **local-only**.
@@ -109,10 +109,10 @@ make sqlc-diff      # sqlc diff (same check as CI)
 
 ## Frontend (Next.js)
 
-App Router in `frontend/`. Server Components by default. `API_BASE_URL` is server-only (health page). Browser calls use `NEXT_PUBLIC_API_BASE_URL` and CORS `WEB_ORIGIN`.
+App Router in `frontend/`. Server Components by default. `API_BASE_URL` is server-only (health page). Browser calls use `NEXT_PUBLIC_API_BASE_URL` and CORS `WEB_ORIGIN`. Package manager is **pnpm** (Corepack `packageManager` `pnpm@12.18.0`). `npm install` / `yarn` in `frontend/` are rejected.
 
 ```bash
-make frontend       # npm install && npm run dev
+make frontend       # pnpm install && pnpm dev
 make test-frontend  # vitest
 make lint-frontend  # eslint
 make typecheck      # next typegen && tsc --noEmit
@@ -159,7 +159,7 @@ Names live in `.env.example`. Empty values fall back to these (see `backend/inte
 | `make test` | Backend + frontend tests |
 | `make lint` | golangci-lint, ESLint, OpenAPI (Redocly CLI 1.34.5) |
 | `make openapi` | `npx --yes @redocly/cli@1.34.5 lint --config redocly.yaml` |
-| `make typecheck` | Frontend `npm run typecheck` |
+| `make typecheck` | Frontend `pnpm typecheck` |
 
 CI (GitHub Actions) runs the same backend test/lint/sqlc-diff, frontend typecheck/test/lint/build, and OpenAPI lint. CI does **not** start Compose or bind host 5435/6377.
 
@@ -180,5 +180,7 @@ CI (GitHub Actions) runs the same backend test/lint/sqlc-diff, frontend typechec
 **`sqlc-diff` fails.** Regenerated code is stale. `make sqlc` and commit `backend/internal/**/sqlc`.
 
 **Frontend `/health` → API unreachable.** API not running, or `API_BASE_URL` not `http://localhost:8080`.
+
+**`npm install` in `frontend/` fails / “must be installed with pnpm”.** Use Corepack pnpm 12.18.0 (`pnpm install`). Do not commit `package-lock.json`.
 
 **`make lint-backend` downloads a lot on first run.** It uses `go run` golangci-lint **v2.4.0** (same pin as CI). Later runs are cached in the module cache.

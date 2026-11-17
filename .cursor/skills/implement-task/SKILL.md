@@ -110,7 +110,7 @@ Typical order inside a phase (skip steps that do not apply):
 
 Do **not** hardcode tool versions from memory. Current pins live in:
 
-- `frontend/package.json` / `package-lock.json` — `dev`, `test`, `lint`, `typecheck`, `build`, `openapi:types`
+- `frontend/package.json` / `pnpm-lock.yaml` — `dev`, `test`, `lint`, `typecheck`, `build`, `openapi:types` (pnpm; Corepack `packageManager`)
 - `backend/go.mod`, `backend/.golangci.yml`, `backend/sqlc.yaml`
 - `.github/workflows/*.yml` — CI Go, Node, golangci-lint, sqlc, Redocly versions
 - `docs/deployment/deployment-local.md` and the root `Makefile` — Compose, goose, API, web; treat as hints and prefer the files above if they disagree

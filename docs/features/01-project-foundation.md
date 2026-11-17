@@ -215,8 +215,8 @@ go run github.com/pressly/goose/v3/cmd/goose@v3.24.3 -dir db/migrations postgres
 API_ADDR=:8080 go run ./cmd/api
 # other terminal:
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 # http://localhost:3000       → Friendfold / Into the fold of friends.
 # http://localhost:3000/health → OK when the API ready check succeeds
 ```
@@ -265,7 +265,7 @@ Decisions / deviations:
 - golangci-lint **v2.4.0** with committed `backend/.golangci.yml` (standard set plus `errorlint` and `contextcheck`; gofmt/goimports as formatters). CI uses Go **1.24.x** even though `go.mod` is 1.22, because sqlc 1.29.0 and golangci-lint v2 need a newer compiler.
 - OpenAPI lint is **Redocly CLI 1.34.5**, not Spectral (better OpenAPI 3.1 support). `redocly.yaml` turns off `info-license`, `no-server-example.com`, `operation-4xx-response`, and `no-unused-components`: there is no product license yet, the only server is localhost, health/ready have no 4xx, and `ErrorEnvelope` / `cookieAuth` are declared for later features.
 - `cookieAuth` is the `friendfold_session` cookie from [02](02-accounts.md). Ready 503 stays `{"status":"unavailable"}`, not the error envelope.
-- Frontend CI also runs Vitest and ESLint (scripts from phase 3). `npm run typecheck` is `next typegen && tsc --noEmit` so App Router types exist on a clean checkout.
+- Frontend CI also runs Vitest and ESLint (scripts from phase 3). `pnpm typecheck` is `next typegen && tsc --noEmit` so App Router types exist on a clean checkout. Package manager is pnpm ([feature 12](12-frontend-pnpm.md)).
 - Path filters were omitted. GitHub required checks stay pending when a path-filtered workflow never runs; these jobs are short enough to run on every PR, including docs-only.
 - Generated OpenAPI client/server stubs are **not** in this phase. Health/ready bodies are tiny literals that already match the spec; codegen waits until a product endpoint needs shared models. AGENTS.md still requires generating types before those endpoints.
 - No Git LFS checkout in CI: no job reads binary assets. PR 13 owns LFS tracking; this phase does not duplicate it.

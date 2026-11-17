@@ -21,7 +21,7 @@ AGENTS.md     # agent rules
 ```
 
 - One Go module under `backend/`.
-- One Node package under `frontend/` (no npm workspaces until a second JS package exists, which needs its own ADR).
+- One Node package under `frontend/`, installed with **pnpm** ([feature 12](../features/12-frontend-pnpm.md)). No pnpm/npm workspaces until a second JS package exists, which needs its own ADR.
 - CI in `.github/workflows/` at the root, with path filters so docs-only PRs do not build the world once those workflows exist.
 - Docker Compose at the repo root for Postgres, Redis, Mailpit.
 

@@ -1,0 +1,7 @@
+# pnpm 12 reads project settings from this file (not package.json "pnpm").
+# Single package only — not a multi-package workspace (ADR 0005).
+# Do not set engineStrict here: package.json engines.npm/yarn are sentinels for
+# npm/yarn. pnpm would fail itself if it enforced those. npm still honors
+# engine-strict in .npmrc.
+allowBuilds:
+  unrs-resolver: true
