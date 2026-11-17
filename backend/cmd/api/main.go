@@ -25,6 +25,7 @@ import (
 	"github.com/anhtuta/friendfold/backend/internal/platform/ratelimit"
 	redisx "github.com/anhtuta/friendfold/backend/internal/platform/redis"
 	"github.com/anhtuta/friendfold/backend/internal/platform/session"
+	"github.com/anhtuta/friendfold/backend/internal/profile"
 )
 
 func main() {
@@ -104,6 +105,10 @@ func run() int {
 		StartTLS: cfg.SMTPStartTLS,
 	}, logger, 8, mailCtx)
 
+	authStore := auth.NewStore(pools.Write)
+	sessStore := session.NewStore(rdb.Cmdable())
+	limiter := ratelimit.New(rdb.Cmdable())
+
 	// Mount auth before ListenAndServe so the first accepted connection already
 	// has /v1/auth. CookieSecure is the session cookie Secure flag: off for
 	// local HTTP (COOKIE_SECURE=false or http WEB_ORIGIN), on for HTTPS so
@@ -112,16 +117,33 @@ func run() int {
 	// against it (CSRF) in addition to mux-level CORS.
 	auth.NewHandler(
 		auth.NewService(
-			auth.NewStore(pools.Write),
-			session.NewStore(rdb.Cmdable()),
+			authStore,
+			sessStore,
 			hasher,
 			gen,
-			ratelimit.New(rdb.Cmdable()),
+			limiter,
 			mailer,
 			cfg.WebOrigin,
 			logger,
 		),
 		cfg.CookieSecure,
+		cfg.WebOrigin,
+	).Mount(mux)
+
+	// Profile uses the same session cookie. Display name stays on users and is
+	// updated through profileAccounts so this module does not SELECT auth
+	// tables. BlockChecker is a no-op until feature 04.
+	profile.NewHandler(
+		profile.NewService(
+			profile.NewStore(pools.Write),
+			profileAccounts{users: authStore},
+			profile.NoopBlocks{},
+			rdb.Cmdable(),
+			limiter,
+			cfg.MediaPublicBaseURL,
+			logger,
+		),
+		sessStore,
 		cfg.WebOrigin,
 	).Mount(mux)
 

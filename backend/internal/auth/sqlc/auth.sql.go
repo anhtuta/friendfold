@@ -258,6 +258,26 @@ func (q *Queries) MarkEmailVerified(ctx context.Context, arg MarkEmailVerifiedPa
 	return result.RowsAffected(), nil
 }
 
+const updateDisplayName = `-- name: UpdateDisplayName :execrows
+UPDATE users
+SET display_name = $2, updated_at = $3
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+type UpdateDisplayNameParams struct {
+	ID          int64
+	DisplayName string
+	UpdatedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateDisplayName(ctx context.Context, arg UpdateDisplayNameParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateDisplayName, arg.ID, arg.DisplayName, arg.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updatePasswordHash = `-- name: UpdatePasswordHash :exec
 UPDATE users
 SET password_hash = $2, updated_at = $3

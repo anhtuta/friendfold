@@ -22,6 +22,7 @@ type accountRepo interface {
 	LiveResetUser(ctx context.Context, hash []byte, now time.Time) (User, error)
 	ConsumeResetAndSetPassword(ctx context.Context, hash []byte, passwordHash string, now time.Time) (userID int64, err error)
 	UpdatePasswordHash(ctx context.Context, userID int64, passwordHash string, now time.Time) error
+	UpdateDisplayName(ctx context.Context, userID int64, displayName string, now time.Time) error
 }
 
 // Store is the Postgres implementation of accountRepo (sqlc).
@@ -236,6 +237,23 @@ func userFromRow(row sqlc.User) User {
 		TermsAcceptedAt: row.TermsAcceptedAt.Time,
 		CreatedAt:       row.CreatedAt.Time,
 	}
+}
+
+// UpdateDisplayName writes users.display_name for a live account. Used by the
+// profile module through a cmd/api adapter (profile does not SELECT users).
+func (s *Store) UpdateDisplayName(ctx context.Context, userID int64, displayName string, now time.Time) error {
+	n, err := s.q.UpdateDisplayName(ctx, sqlc.UpdateDisplayNameParams{
+		ID:          userID,
+		DisplayName: displayName,
+		UpdatedAt:   pgTime(now),
+	})
+	if err != nil {
+		return fmt.Errorf("auth update display name: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func pgDate(t time.Time) pgtype.Date {

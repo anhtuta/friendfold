@@ -12,7 +12,7 @@ func CORS(webOrigin string) func(http.Handler) http.Handler {
 			if origin != "" && origin == webOrigin {
 				w.Header().Set("Access-Control-Allow-Origin", webOrigin)
 				w.Header().Add("Vary", "Origin")
-				w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, POST, PATCH, DELETE, OPTIONS")
 				w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, X-Request-Id")
 				w.Header().Set("Access-Control-Expose-Headers", "X-Request-Id")
 				w.Header().Set("Access-Control-Allow-Credentials", "true")

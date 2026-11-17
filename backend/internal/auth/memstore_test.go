@@ -166,6 +166,20 @@ func (m *memStore) UpdatePasswordHash(_ context.Context, userID int64, passwordH
 	return nil
 }
 
+func (m *memStore) UpdateDisplayName(_ context.Context, userID int64, displayName string, now time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.byID[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	u.DisplayName = displayName
+	_ = now
+	m.byID[u.ID] = u
+	m.byEmail[u.Email] = u
+	return nil
+}
+
 func (m *memStore) unusedCount(userID int64, purpose string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
