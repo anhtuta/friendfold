@@ -438,7 +438,7 @@ Acceptance:
 ### Phase 8 — Avatar and cover upload UI
 
 **Status:** In progress  
-**PR:** (stacked; URL filled when the PR opens)
+**PR:** https://github.com/anhtuta/friendfold/pull/51 (after https://github.com/anhtuta/friendfold/pull/50)
 
 Work:
 
