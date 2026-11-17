@@ -400,8 +400,8 @@ Acceptance:
 
 ### Phase 6 — Frontend profile page
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** https://github.com/anhtuta/friendfold/pull/49 (after https://github.com/anhtuta/friendfold/pull/48)
 
 Work:
 

@@ -19,6 +19,7 @@ vi.mock("next/navigation", () => ({
 function renderSignup() {
   const value: AuthState = {
     user: null,
+    profile: null,
     ready: true,
     refresh: async () => {},
     logout: async () => {},

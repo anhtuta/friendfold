@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchCurrentUser, readErrorMessage } from "./client";
+import { fetchCurrentUser, fetchPublicProfile, readErrorMessage } from "./client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -46,5 +46,36 @@ describe("fetchCurrentUser", () => {
       ),
     );
     await expect(fetchCurrentUser()).resolves.toEqual(user);
+  });
+});
+
+describe("fetchPublicProfile", () => {
+  it("returns null on 404", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("{}", { status: 404 })),
+    );
+    await expect(fetchPublicProfile("nobodyhere")).resolves.toBeNull();
+  });
+
+  it("returns the public profile on 200", async () => {
+    const profile = {
+      id: "1",
+      username: "minh",
+      displayName: "Minh",
+      bio: "Hi",
+      avatarUrl: null,
+      coverUrl: null,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(profile), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    await expect(fetchPublicProfile("minh")).resolves.toEqual(profile);
   });
 });

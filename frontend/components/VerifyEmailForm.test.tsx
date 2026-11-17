@@ -29,6 +29,7 @@ function renderForm() {
   const refresh = vi.fn(async () => {});
   const value: AuthState = {
     user: null,
+    profile: null,
     ready: true,
     refresh,
     logout: async () => {},

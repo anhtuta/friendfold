@@ -25,6 +25,7 @@ function renderBanner(state: Partial<AuthState> = {}) {
       emailVerified: false,
       displayName: "Minh",
     },
+    profile: state.profile ?? null,
     ready: state.ready ?? true,
     refresh: state.refresh ?? (async () => {}),
     logout: state.logout ?? (async () => {}),

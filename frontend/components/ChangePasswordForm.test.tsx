@@ -27,6 +27,7 @@ const signedIn: AuthState = {
     emailVerified: true,
     displayName: "Minh",
   },
+  profile: null,
   ready: true,
   refresh: async () => {},
   logout: async () => {},
@@ -59,6 +60,7 @@ describe("ChangePasswordForm", () => {
   it("sends anonymous visitors to login", async () => {
     renderForm({
       user: null,
+      profile: null,
       ready: true,
       refresh: async () => {},
       logout: async () => {},
