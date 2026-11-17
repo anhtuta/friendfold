@@ -28,7 +28,7 @@ Build in number order. Template: [_TEMPLATE.md](features/_TEMPLATE.md). One phas
 
 ## Decisions
 
-Architecture Decision Records. Write a new one when a choice is expensive to reverse. Next number: **0009**.
+Architecture Decision Records. Write a new one when a choice is expensive to reverse. Next number: **0010**.
 
 | # | Decision | Status |
 | --- | --- | --- |
@@ -40,6 +40,7 @@ Architecture Decision Records. Write a new one when a choice is expensive to rev
 | [0006](decisions/0006-snowflake-ids.md) | 64-bit Snowflake IDs (`BIGINT` in DB, strings on the wire) | Accepted |
 | [0007](decisions/0007-tailwind-css.md) | Tailwind CSS for the Next.js app | Accepted |
 | [0008](decisions/0008-dark-theme.md) | Dark theme as the default look | Accepted |
+| [0009](decisions/0009-object-storage.md) | Object storage behind `ObjectStore` (fs / S3-compatible) | Accepted |
 
 ## Agent rules
 

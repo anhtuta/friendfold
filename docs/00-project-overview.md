@@ -174,7 +174,7 @@ MVP (local and first production):
                                   timelines
 ```
 
-Media (from posts/profiles): object storage (MinIO in dev; S3 or Cloudflare R2 in prod) + CDN. The API never serves raw user files from its own disk in production.
+Media (from posts/profiles): object storage behind `ObjectStore` ([ADR 0009](decisions/0009-object-storage.md); filesystem default locally, MinIO for the S3 driver; S3 or Cloudflare R2 in prod) + CDN. The API never serves raw user files from its own disk in production.
 
 Later topology (not MVP, do not build now):
 
