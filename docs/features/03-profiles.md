@@ -321,8 +321,8 @@ Acceptance:
 
 ### Phase 2 — Migration + sqlc
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** https://github.com/anhtuta/friendfold/pull/45 (after https://github.com/anhtuta/friendfold/pull/43)
 
 Work:
 
