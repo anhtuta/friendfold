@@ -3,6 +3,8 @@ import { genericAuthError } from "@/lib/copy";
 import { publicApiBaseUrl } from "@/lib/publicApiBaseUrl";
 
 export type User = components["schemas"]["User"];
+export type MeProfile = components["schemas"]["MeProfile"];
+export type PublicProfile = components["schemas"]["PublicProfile"];
 export type RegisterRequest = components["schemas"]["RegisterRequest"];
 export type LoginRequest = components["schemas"]["LoginRequest"];
 export type VerifyEmailRequest = components["schemas"]["VerifyEmailRequest"];
@@ -48,4 +50,29 @@ export async function fetchCurrentUser(): Promise<User | null> {
     throw new Error(await readErrorMessage(res));
   }
   return (await res.json()) as User;
+}
+
+export async function fetchMyProfile(): Promise<MeProfile | null> {
+  const res = await apiFetch("/v1/me/profile");
+  if (res.status === 401) {
+    return null;
+  }
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  return (await res.json()) as MeProfile;
+}
+
+export async function fetchPublicProfile(
+  username: string,
+  init: RequestInit = {},
+): Promise<PublicProfile | null> {
+  const res = await apiFetch(`/v1/users/${encodeURIComponent(username)}`, init);
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  return (await res.json()) as PublicProfile;
 }

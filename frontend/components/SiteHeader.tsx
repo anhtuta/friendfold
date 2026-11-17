@@ -6,6 +6,7 @@ import {
   authLoadingLabel,
   changePasswordLink,
   productName,
+  profileNavLabel,
   signInLabel,
   signOutLabel,
   signUpLabel,
@@ -15,7 +16,7 @@ import {
 import { useAuth } from "./AuthProvider";
 
 export function SiteHeader() {
-  const { user, ready, logout } = useAuth();
+  const { user, profile, ready, logout } = useAuth();
 
   return (
     <header className="border-b border-border">
@@ -34,6 +35,14 @@ export function SiteHeader() {
               <span className="text-muted">
                 {signedInPrefix} {user.displayName}
               </span>
+              {profile?.username ? (
+                <Link
+                  href={`/u/${profile.username}`}
+                  className="text-accent underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                >
+                  {profileNavLabel}
+                </Link>
+              ) : null}
               <Link
                 href="/change-password"
                 className="text-accent underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   changePasswordLink,
+  profileNavLabel,
   signInLabel,
   signOutLabel,
   signUpLabel,
@@ -16,6 +17,7 @@ function renderHeader(state: Partial<AuthState> = {}) {
   const logout = state.logout ?? (async () => {});
   const value: AuthState = {
     user: state.user ?? null,
+    profile: state.profile ?? null,
     ready: state.ready ?? true,
     refresh: state.refresh ?? (async () => {}),
     logout,
@@ -60,5 +62,34 @@ describe("SiteHeader", () => {
     ).toHaveAttribute("href", "/change-password");
     await user.click(screen.getByRole("button", { name: signOutLabel }));
     expect(logout).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("link", { name: profileNavLabel }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("links to the public profile when a username is set", () => {
+    renderHeader({
+      user: {
+        id: "1",
+        email: "minh@example.com",
+        emailVerified: true,
+        displayName: "Minh",
+      },
+      profile: {
+        id: "1",
+        username: "minh",
+        displayName: "Minh",
+        bio: "",
+        avatarUrl: null,
+        coverUrl: null,
+        email: "minh@example.com",
+        emailVerified: true,
+        usernameChangedAt: "2026-11-17T12:00:00Z",
+      },
+    });
+    expect(screen.getByRole("link", { name: profileNavLabel })).toHaveAttribute(
+      "href",
+      "/u/minh",
+    );
   });
 });

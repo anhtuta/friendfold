@@ -9,6 +9,7 @@ import { HomePage } from "./HomePage";
 function renderHome(user: AuthState["user"] = null) {
   const value: AuthState = {
     user,
+    profile: null,
     ready: true,
     refresh: async () => {},
     logout: async () => {},

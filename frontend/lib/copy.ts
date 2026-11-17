@@ -104,3 +104,14 @@ export const changePasswordSuccess = "Your password has been updated.";
 export const changePasswordLink = "Change password";
 
 export const currentPasswordLabel = "Current password";
+
+export const profileNavLabel = "Profile";
+
+export const profilePostsEmpty = "Posts will show up here.";
+
+export const profileNotFoundHeading = "Profile not found";
+
+export const profileNotFoundBody =
+  "This username is not on Friendfold.";
+
+export const profileHandlePrefix = "@";

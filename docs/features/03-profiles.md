@@ -400,8 +400,8 @@ Acceptance:
 
 ### Phase 6 — Frontend profile page
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** (stacked; URL filled when the PR opens)
 
 Work:
 
