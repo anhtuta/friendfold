@@ -3,8 +3,10 @@ package profile
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -34,8 +36,13 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Use(h.requireSession)
 		r.Get("/", h.getMe)
 		r.Patch("/", h.patchMe)
+		r.Post("/avatar", h.postAvatar)
+		r.Delete("/avatar", h.deleteAvatar)
+		r.Post("/cover", h.postCover)
+		r.Delete("/cover", h.deleteCover)
 	})
 	r.Get("/v1/users/{username}", h.getPublic)
+	r.Get("/v1/media/*", h.getMedia)
 }
 
 type patchBody struct {
@@ -71,6 +78,107 @@ func (h *Handler) patchMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeMe(w, out)
+}
+
+func (h *Handler) postAvatar(w http.ResponseWriter, r *http.Request) {
+	h.upload(w, r, KindAvatar)
+}
+
+func (h *Handler) postCover(w http.ResponseWriter, r *http.Request) {
+	h.upload(w, r, KindCover)
+}
+
+func (h *Handler) deleteAvatar(w http.ResponseWriter, r *http.Request) {
+	h.deleteMedia(w, r, KindAvatar)
+}
+
+func (h *Handler) deleteCover(w http.ResponseWriter, r *http.Request) {
+	h.deleteMedia(w, r, KindCover)
+}
+
+func (h *Handler) upload(w http.ResponseWriter, r *http.Request, kind string) {
+	_, maxBytes, _ := kindLimits(kind)
+	raw, err := readUploadFile(w, r, maxBytes)
+	if err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	out, err := h.svc.UploadImage(r.Context(), sessionUserID(r), httpx.ClientIP(r), kind, raw)
+	if err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	writeMe(w, out)
+}
+
+func (h *Handler) deleteMedia(w http.ResponseWriter, r *http.Request, kind string) {
+	out, err := h.svc.DeleteImage(r.Context(), sessionUserID(r), httpx.ClientIP(r), kind)
+	if err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	writeMe(w, out)
+}
+
+func (h *Handler) getMedia(w http.ResponseWriter, r *http.Request) {
+	key := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
+	rc, ct, err := h.svc.OpenObject(r.Context(), key)
+	if err != nil {
+		h.writeErr(w, err)
+		return
+	}
+	defer rc.Close()
+	if ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	if rs, ok := rc.(io.ReadSeeker); ok {
+		http.ServeContent(w, r, "image.jpg", time.Time{}, rs)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, rc)
+}
+
+func readUploadFile(w http.ResponseWriter, r *http.Request, maxBytes int) ([]byte, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBytes)+multipartSlack)
+	if err := r.ParseMultipartForm(int64(maxBytes) + multipartSlack); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return nil, ErrTooLarge
+		}
+		return nil, ValidationError{Msg: "multipart body is invalid"}
+	}
+	form := r.MultipartForm
+	if form == nil {
+		return nil, ValidationError{Msg: "file is required"}
+	}
+	for name := range form.File {
+		if name != "file" {
+			return nil, ValidationError{Msg: "unexpected file field"}
+		}
+	}
+	files := form.File["file"]
+	if len(files) != 1 {
+		return nil, ValidationError{Msg: "file is required"}
+	}
+	f, err := files[0].Open()
+	if err != nil {
+		return nil, ValidationError{Msg: "file is required"}
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, int64(maxBytes)+1))
+	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return nil, ErrTooLarge
+		}
+		return nil, ValidationError{Msg: "file is required"}
+	}
+	if len(raw) > maxBytes {
+		return nil, ErrTooLarge
+	}
+	return raw, nil
 }
 
 func (h *Handler) getPublic(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +246,10 @@ func (h *Handler) writeErr(w http.ResponseWriter, err error) {
 		httpx.WriteError(w, http.StatusNotFound, "not_found", "Profile not found")
 	case errors.Is(err, ErrUnauthenticated):
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthenticated", "Authentication required")
+	case errors.Is(err, ErrInvalidImage):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_image", "Image is not a supported JPEG, PNG, or WebP")
+	case errors.Is(err, ErrTooLarge):
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "File is too large")
 	default:
 		httpx.WriteError(w, http.StatusInternalServerError, "internal_error", "Internal error")
 	}

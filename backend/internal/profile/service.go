@@ -16,9 +16,15 @@ import (
 
 const (
 	patchLimit  = 30
+	avatarLimit = 10
+	coverLimit  = 10
 	publicLimit = 120
 	limitWindow = 15 * time.Minute
 )
+
+type idGen interface {
+	Next(ctx context.Context) (int64, error)
+}
 
 type accounts interface {
 	ByID(ctx context.Context, id int64) (Account, error)
@@ -48,6 +54,8 @@ type Service struct {
 	limiter    limiter
 	logger     *slog.Logger
 	publicBase string
+	blobs      blob.Store
+	ids        idGen
 	now        func() time.Time
 }
 
@@ -73,6 +81,13 @@ func NewService(repo repo, accounts accounts, blocks blocks, rdb redis.Cmdable, 
 		publicBase: publicBase,
 		now:        time.Now,
 	}
+}
+
+// WithMedia attaches object storage and Snowflake IDs for avatar/cover uploads.
+func (s *Service) WithMedia(store blob.Store, ids idGen) *Service {
+	s.blobs = store
+	s.ids = ids
+	return s
 }
 
 // GetMe loads or creates the owner profile.
