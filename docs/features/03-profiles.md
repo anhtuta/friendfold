@@ -1,6 +1,6 @@
 # Feature 03: Profiles
 
-**Status:** In progress (phase 1)  
+**Status:** In progress (phase 8)  
 **Owner:** —  
 **Plan version:** 2
 
@@ -420,7 +420,7 @@ Acceptance:
 ### Phase 7 — Frontend edit and onboarding
 
 **Status:** In progress  
-**PR:** (stacked; URL filled when the PR opens)
+**PR:** https://github.com/anhtuta/friendfold/pull/50 (after https://github.com/anhtuta/friendfold/pull/49)
 
 Work:
 
@@ -437,8 +437,8 @@ Acceptance:
 
 ### Phase 8 — Avatar and cover upload UI
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** (stacked; URL filled when the PR opens)
 
 Work:
 

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchCurrentUser, fetchPublicProfile, readErrorMessage } from "./client";
+import {
+  fetchCurrentUser,
+  fetchPublicProfile,
+  readErrorMessage,
+  uploadProfileImage,
+} from "./client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -77,5 +82,40 @@ describe("fetchPublicProfile", () => {
       ),
     );
     await expect(fetchPublicProfile("minh")).resolves.toEqual(profile);
+  });
+});
+
+describe("uploadProfileImage", () => {
+  it("sends FormData without a JSON Content-Type", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "1",
+          username: "minh",
+          displayName: "Minh",
+          bio: "",
+          avatarUrl: "http://localhost:8080/v1/media/profile/1/avatar/example.jpg",
+          coverUrl: null,
+          email: "minh@example.com",
+          emailVerified: true,
+          usernameChangedAt: null,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new File([new Uint8Array([0xff, 0xd8])], "a.jpg", {
+      type: "image/jpeg",
+    });
+    await uploadProfileImage("avatar", file);
+    const callArgs = fetchMock.mock.calls[0];
+    expect(callArgs).toBeDefined();
+    if (callArgs === undefined) {
+      throw new Error("expected fetch to be called");
+    }
+    const init = callArgs[1] as RequestInit;
+    expect(init.body).toBeInstanceOf(FormData);
+    const headers = new Headers(init.headers);
+    expect(headers.get("Content-Type")).toBeNull();
   });
 });
