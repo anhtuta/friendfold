@@ -11,7 +11,7 @@ func TestNewRejectsInvalidWriteURL(t *testing.T) {
 	t.Parallel()
 	_, err := New(context.Background(), config.Config{
 		DatabaseURL:     "://not-a-url",
-		DatabaseReadURL: "postgres://friendfold:friendfold@127.0.0.1:5432/friendfold",
+		DatabaseReadURL: "postgres://friendfold:friendfold@127.0.0.1:5435/friendfold",
 		PGXMaxConns:     10,
 	})
 	if err == nil {
@@ -22,7 +22,7 @@ func TestNewRejectsInvalidWriteURL(t *testing.T) {
 func TestNewRejectsInvalidReadURL(t *testing.T) {
 	t.Parallel()
 	_, err := New(context.Background(), config.Config{
-		DatabaseURL:     "postgres://friendfold:friendfold@127.0.0.1:5432/friendfold",
+		DatabaseURL:     "postgres://friendfold:friendfold@127.0.0.1:5435/friendfold",
 		DatabaseReadURL: "://not-a-url",
 		PGXMaxConns:     10,
 	})

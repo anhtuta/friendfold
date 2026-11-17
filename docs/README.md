@@ -49,6 +49,15 @@ Architecture Decision Records. Write a new one when a choice is expensive to rev
 | [.cursor/rules/](../.cursor/rules/) | Same policies, scoped for Cursor |
 | [`.cursor/skills/implement-task/SKILL.md`](../.cursor/skills/implement-task/SKILL.md) | Project skill: local IDE agent implements a named task or plan phase (`/implement-task`) |
 
+## Deployment
+
+Runbooks for developers and operators. Not product feature plans.
+
+| Doc | What it is |
+| --- | --- |
+| [deployment/deployment-local.md](deployment/deployment-local.md) | Local development: Compose, migrations, API, web, Mailpit, ports, env, troubleshooting (`make help`) |
+| `deployment/deployment-prod.md` | Production deploy — **not written yet** |
+
 ## Agent tooling
 
 Not part of the 01–09 product roadmap. These docs do not add user-facing surface.
@@ -56,6 +65,7 @@ Not part of the 01–09 product roadmap. These docs do not add user-facing surfa
 | Doc | What it is |
 | --- | --- |
 | [features/10-implement-task-skill.md](features/10-implement-task-skill.md) | Plan for the repo-local Cursor IDE `/implement-task` skill |
+| [features/11-local-dev-tooling.md](features/11-local-dev-tooling.md) | Plan for the local Makefile, remapped Compose host ports, and `docs/deployment/` |
 
 In Cursor Agent chat, invoke **`/implement-task`** and name the task or phase. Example (usage only — do not run it just because you read this file):
 

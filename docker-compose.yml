@@ -1,11 +1,12 @@
 # Local development only. The default Postgres password is not for production.
+# Host ports: Postgres 5435, Redis 6377 (containers stay 5432 / 6379).
 name: friendfold
 
 services:
   postgres:
     image: postgres:16
     ports:
-      - "5432:5432"
+      - "5435:5432"
     environment:
       POSTGRES_USER: friendfold
       POSTGRES_PASSWORD: friendfold
@@ -21,7 +22,7 @@ services:
   redis:
     image: redis:7
     ports:
-      - "6379:6379"
+      - "6377:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s
