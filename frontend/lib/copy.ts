@@ -139,3 +139,21 @@ export const usernameCooldownMessage =
   "You can change your username again after the 14-day cooldown.";
 
 export const usernameHint = "3–20 characters: lowercase letters, numbers, and underscores.";
+
+export const avatarLabel = "Profile photo";
+
+export const coverLabel = "Cover photo";
+
+export const chooseAvatarLabel = "Choose profile photo";
+
+export const chooseCoverLabel = "Choose cover photo";
+
+export const removeAvatarLabel = "Remove photo";
+
+export const removeCoverLabel = "Remove cover";
+
+export const photoTypeHint = "JPEG, PNG, or WebP. Avatars up to 5 MB, covers up to 10 MB.";
+
+export const photoTypeRejected = "Use a JPEG, PNG, or WebP image.";
+
+export const photoTooLarge = "That file is too large.";

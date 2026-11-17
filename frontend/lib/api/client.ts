@@ -20,7 +20,13 @@ export async function apiFetch(
 ): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
-  if (init.body !== undefined && !headers.has("Content-Type")) {
+  const isFormData =
+    typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (
+    init.body !== undefined &&
+    !headers.has("Content-Type") &&
+    !isFormData
+  ) {
     headers.set("Content-Type", "application/json");
   }
   return fetch(`${publicApiBaseUrl()}${path}`, {
@@ -85,6 +91,32 @@ export async function patchMyProfile(
     method: "PATCH",
     body: JSON.stringify(body),
   });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  return (await res.json()) as MeProfile;
+}
+
+export async function uploadProfileImage(
+  kind: "avatar" | "cover",
+  file: File,
+): Promise<MeProfile> {
+  const data = new FormData();
+  data.append("file", file);
+  const res = await apiFetch(`/v1/me/profile/${kind}`, {
+    method: "POST",
+    body: data,
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  return (await res.json()) as MeProfile;
+}
+
+export async function deleteProfileImage(
+  kind: "avatar" | "cover",
+): Promise<MeProfile> {
+  const res = await apiFetch(`/v1/me/profile/${kind}`, { method: "DELETE" });
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));
   }

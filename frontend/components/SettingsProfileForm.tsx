@@ -19,6 +19,7 @@ import {
 import { usernameCooldownEndsAt } from "@/lib/usernameCooldown";
 
 import { useAuth } from "./AuthProvider";
+import { ProfilePhotos } from "./ProfilePhotos";
 
 const fieldClass =
   "mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
@@ -103,6 +104,7 @@ function SettingsProfileFields({
             {settingsProfileSaved}
           </p>
         ) : null}
+        <ProfilePhotos profile={profile} refresh={refresh} />
         <label className="text-sm text-muted">
           {displayNameLabel}
           <input
