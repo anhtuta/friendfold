@@ -12,10 +12,25 @@ sql:
         emit_empty_slices: true
   - engine: postgresql
     queries: db/queries/auth.sql
-    schema: db/migrations
+    # Pin to auth-owned migrations so later feature tables do not leak into
+    # internal/auth/sqlc models.
+    schema:
+      - db/migrations/00002_users.sql
+      - db/migrations/00003_auth_tokens.sql
     gen:
       go:
         package: sqlc
         out: internal/auth/sqlc
+        sql_package: pgx/v5
+        emit_empty_slices: true
+  - engine: postgresql
+    queries: db/queries/profile.sql
+    schema:
+      - db/migrations/00002_users.sql
+      - db/migrations/00004_profiles.sql
+    gen:
+      go:
+        package: sqlc
+        out: internal/profile/sqlc
         sql_package: pgx/v5
         emit_empty_slices: true
