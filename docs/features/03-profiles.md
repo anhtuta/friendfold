@@ -384,7 +384,7 @@ Acceptance:
 ### Phase 5 — Upload backend
 
 **Status:** In progress  
-**PR:** (stacked; URL filled when the PR opens)
+**PR:** https://github.com/anhtuta/friendfold/pull/48 (after https://github.com/anhtuta/friendfold/pull/47)
 
 Work:
 
