@@ -419,8 +419,8 @@ Acceptance:
 
 ### Phase 7 — Frontend edit and onboarding
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** (stacked; URL filled when the PR opens)
 
 Work:
 

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   changePasswordLink,
   profileNavLabel,
+  settingsNavLabel,
   signInLabel,
   signOutLabel,
   signUpLabel,
@@ -90,6 +91,10 @@ describe("SiteHeader", () => {
     expect(screen.getByRole("link", { name: profileNavLabel })).toHaveAttribute(
       "href",
       "/u/minh",
+    );
+    expect(screen.getByRole("link", { name: settingsNavLabel })).toHaveAttribute(
+      "href",
+      "/settings/profile",
     );
   });
 });
