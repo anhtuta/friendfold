@@ -12,10 +12,12 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/anhtuta/friendfold/backend/internal/auth"
+	"github.com/anhtuta/friendfold/backend/internal/platform/blob"
 	"github.com/anhtuta/friendfold/backend/internal/platform/config"
 	"github.com/anhtuta/friendfold/backend/internal/platform/db"
 	httpx "github.com/anhtuta/friendfold/backend/internal/platform/http"
@@ -84,6 +86,30 @@ func run() int {
 		}
 	}()
 
+	// Avatars and covers live in ObjectStore (fs locally, S3 in production).
+	// GET /v1/ready does not ping the bucket or disk.
+	blobs, err := blob.Open(context.Background(), blob.Config{
+		Driver:        cfg.MediaDriver,
+		Dir:           cfg.MediaDir,
+		PublicBaseURL: cfg.MediaPublicBaseURL,
+		S3: blob.S3Config{
+			Endpoint:  cfg.MediaS3Endpoint,
+			Region:    cfg.MediaS3Region,
+			Bucket:    cfg.MediaS3Bucket,
+			AccessKey: cfg.MediaS3AccessKey,
+			SecretKey: cfg.MediaS3SecretKey,
+			UseSSL:    cfg.MediaS3UseSSL,
+			PathStyle: cfg.MediaS3PathStyle,
+		},
+	})
+	if err != nil {
+		logger.Error("object store", slog.String("error", err.Error()))
+		return 1
+	}
+	if cfg.MediaDriver == blob.DriverFS && strings.HasPrefix(strings.ToLower(cfg.WebOrigin), "https://") {
+		logger.Warn("MEDIA_DRIVER=fs with an https WEB_ORIGIN; production should use s3")
+	}
+
 	// ReadyDeps are the three backends GET /v1/ready must ping (write Postgres,
 	// read Postgres, Redis). Orchestrators use that to withhold traffic until
 	// the process can actually serve; /v1/health stays a no-dependency liveness
@@ -142,7 +168,7 @@ func run() int {
 			limiter,
 			cfg.MediaPublicBaseURL,
 			logger,
-		),
+		).WithMedia(blobs, gen),
 		sessStore,
 		cfg.WebOrigin,
 	).Mount(mux)

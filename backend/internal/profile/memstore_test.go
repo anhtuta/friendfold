@@ -81,6 +81,34 @@ func (m *memRepo) UpdateUsername(_ context.Context, userID int64, username strin
 	return rec, nil
 }
 
+func (m *memRepo) SetAvatar(_ context.Context, userID int64, key string, now time.Time) (Record, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec, ok := m.byID[userID]
+	if !ok {
+		return Record{}, ErrNotFound
+	}
+	rec.AvatarObjectKey = key
+	rec.UpdatedAt = now
+	m.byID[userID] = rec
+	return rec, nil
+}
+
+func (m *memRepo) SetCover(_ context.Context, userID int64, key string, now time.Time) (Record, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec, ok := m.byID[userID]
+	if !ok {
+		return Record{}, ErrNotFound
+	}
+	rec.CoverObjectKey = key
+	rec.UpdatedAt = now
+	m.byID[userID] = rec
+	return rec, nil
+}
+
+func (m *memRepo) InsertMedia(context.Context, Media) error { return nil }
+
 type memAccounts struct {
 	mu   sync.Mutex
 	byID map[int64]Account

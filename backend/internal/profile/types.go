@@ -16,7 +16,27 @@ var (
 	ErrUsernameCooldown = errors.New("profile: username cooldown")
 	ErrRateLimited      = errors.New("profile: rate limited")
 	ErrForbidden        = errors.New("profile: forbidden")
+	ErrInvalidImage     = errors.New("profile: invalid image")
+	ErrTooLarge         = errors.New("profile: payload too large")
 )
+
+const (
+	KindAvatar = "avatar"
+	KindCover  = "cover"
+)
+
+// Media is a media_objects row.
+type Media struct {
+	ID        int64
+	UserID    int64
+	Kind      string
+	ObjectKey string
+	MIME      string
+	Bytes     int
+	Width     int
+	Height    int
+	CreatedAt time.Time
+}
 
 // ValidationError is a 400 validation_error.
 type ValidationError struct {
