@@ -338,8 +338,8 @@ Acceptance:
 
 ### Phase 3 — Object storage platform
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** (stacked; URL filled when the PR opens)
 
 Work:
 

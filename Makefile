@@ -33,7 +33,7 @@ help: ## List targets
 		'Usage: make <target>' \
 		'' \
 		'Compose' \
-		'  up              Start Postgres, Redis, Mailpit (docker compose up -d)' \
+		'  up              Start Postgres, Redis, Mailpit, MinIO (docker compose up -d)' \
 		'  down            Stop Compose (keeps volumes)' \
 		'  logs            Follow Compose logs' \
 		'' \

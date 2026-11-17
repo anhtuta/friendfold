@@ -10,21 +10,31 @@ import (
 
 // Config holds process-level settings loaded from the environment.
 type Config struct {
-	APIAddr           string
-	LogLevel          string
-	SnowflakeWorkerID uint16
-	WebOrigin         string
-	DatabaseURL       string
-	DatabaseReadURL   string
-	RedisURL          string
-	PGXMaxConns       int32
-	CookieSecure      bool
-	SMTPHost          string
-	SMTPPort          int
-	SMTPUsername      string
-	SMTPPassword      string
-	SMTPFrom          string
-	SMTPStartTLS      bool
+	APIAddr            string
+	LogLevel           string
+	SnowflakeWorkerID  uint16
+	WebOrigin          string
+	DatabaseURL        string
+	DatabaseReadURL    string
+	RedisURL           string
+	PGXMaxConns        int32
+	CookieSecure       bool
+	SMTPHost           string
+	SMTPPort           int
+	SMTPUsername       string
+	SMTPPassword       string
+	SMTPFrom           string
+	SMTPStartTLS       bool
+	MediaDriver        string
+	MediaDir           string
+	MediaPublicBaseURL string
+	MediaS3Endpoint    string
+	MediaS3Region      string
+	MediaS3Bucket      string
+	MediaS3AccessKey   string
+	MediaS3SecretKey   string
+	MediaS3UseSSL      bool
+	MediaS3PathStyle   bool
 }
 
 const (
@@ -41,6 +51,16 @@ const (
 	defaultSMTPPort = 1025
 	defaultSMTPFrom = "Friendfold <friendfold@localhost>"
 
+	defaultMediaDriver        = "fs"
+	defaultMediaDir           = "data/media"
+	defaultMediaPublicBaseURL = "http://localhost:8080/v1/media"
+	defaultMediaS3Endpoint    = "http://127.0.0.1:9000"
+	defaultMediaS3Region      = "us-east-1"
+	defaultMediaS3Bucket      = "friendfold-media"
+	// Local Compose MinIO (docker-compose.yml). Not for production.
+	defaultMediaS3AccessKey = "friendfold"
+	defaultMediaS3SecretKey = "friendfold"
+
 	maxSnowflakeWorkerID = 1023 // 10 bits in the Snowflake layout
 	minPGXMaxConns       = 1
 	maxPGXMaxConns       = 100
@@ -51,15 +71,23 @@ const (
 // Load reads configuration from environment variables.
 func Load() (Config, error) {
 	cfg := Config{
-		APIAddr:      envOr("API_ADDR", defaultAPIAddr),
-		LogLevel:     strings.ToLower(envOr("LOG_LEVEL", defaultLogLevel)),
-		WebOrigin:    envOr("WEB_ORIGIN", defaultWebOrigin),
-		DatabaseURL:  envOr("DATABASE_URL", defaultDatabaseURL),
-		RedisURL:     envOr("REDIS_URL", defaultRedisURL),
-		SMTPHost:     envOr("SMTP_HOST", defaultSMTPHost),
-		SMTPUsername: os.Getenv("SMTP_USERNAME"),
-		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
-		SMTPFrom:     envOr("SMTP_FROM", defaultSMTPFrom),
+		APIAddr:            envOr("API_ADDR", defaultAPIAddr),
+		LogLevel:           strings.ToLower(envOr("LOG_LEVEL", defaultLogLevel)),
+		WebOrigin:          envOr("WEB_ORIGIN", defaultWebOrigin),
+		DatabaseURL:        envOr("DATABASE_URL", defaultDatabaseURL),
+		RedisURL:           envOr("REDIS_URL", defaultRedisURL),
+		SMTPHost:           envOr("SMTP_HOST", defaultSMTPHost),
+		SMTPUsername:       os.Getenv("SMTP_USERNAME"),
+		SMTPPassword:       os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:           envOr("SMTP_FROM", defaultSMTPFrom),
+		MediaDriver:        strings.ToLower(envOr("MEDIA_DRIVER", defaultMediaDriver)),
+		MediaDir:           envOr("MEDIA_DIR", defaultMediaDir),
+		MediaPublicBaseURL: strings.TrimRight(envOr("MEDIA_PUBLIC_BASE_URL", defaultMediaPublicBaseURL), "/"),
+		MediaS3Endpoint:    envOr("MEDIA_S3_ENDPOINT", defaultMediaS3Endpoint),
+		MediaS3Region:      envOr("MEDIA_S3_REGION", defaultMediaS3Region),
+		MediaS3Bucket:      envOr("MEDIA_S3_BUCKET", defaultMediaS3Bucket),
+		MediaS3AccessKey:   envOr("MEDIA_S3_ACCESS_KEY", defaultMediaS3AccessKey),
+		MediaS3SecretKey:   envOr("MEDIA_S3_SECRET_KEY", defaultMediaS3SecretKey),
 	}
 
 	cfg.DatabaseReadURL = envOr("DATABASE_READ_URL", cfg.DatabaseURL)
@@ -111,6 +139,22 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	cfg.SMTPStartTLS = startTLS
+
+	switch cfg.MediaDriver {
+	case "fs", "s3":
+	default:
+		return Config{}, fmt.Errorf("config: invalid MEDIA_DRIVER %q (want fs or s3)", cfg.MediaDriver)
+	}
+	useSSL, err := parseBoolEnv("MEDIA_S3_USE_SSL", os.Getenv("MEDIA_S3_USE_SSL"), false)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.MediaS3UseSSL = useSSL
+	pathStyle, err := parseBoolEnv("MEDIA_S3_PATH_STYLE", os.Getenv("MEDIA_S3_PATH_STYLE"), true)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.MediaS3PathStyle = pathStyle
 
 	return cfg, nil
 }

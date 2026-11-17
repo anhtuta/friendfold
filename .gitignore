@@ -16,5 +16,8 @@ out/
 frontend/coverage/
 pnpm-debug.log*
 
+# Local object storage (MEDIA_DRIVER=fs)
+data/media/
+
 # OS
 .DS_Store
