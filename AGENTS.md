@@ -76,8 +76,9 @@ Accepted ADRs already in the repo:
 - [0006](docs/decisions/0006-snowflake-ids.md) — 64-bit Snowflake IDs
 - [0007](docs/decisions/0007-tailwind-css.md) — Tailwind CSS
 - [0008](docs/decisions/0008-dark-theme.md) — dark theme as the default look
+- [0009](docs/decisions/0009-object-storage.md) — object storage behind an interface (fs / S3-compatible)
 
-Next number is `0009`. Status is `Proposed`, `Accepted`, `Superseded by NNNN`, or `Deprecated`.
+Next number is `0010`. Status is `Proposed`, `Accepted`, `Superseded by NNNN`, or `Deprecated`.
 
 ## (d) API contract first
 
