@@ -22,6 +22,16 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("SMTP_PASSWORD", "")
 	t.Setenv("SMTP_FROM", "")
 	t.Setenv("SMTP_STARTTLS", "")
+	t.Setenv("MEDIA_DRIVER", "")
+	t.Setenv("MEDIA_DIR", "")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "")
+	t.Setenv("MEDIA_S3_ENDPOINT", "")
+	t.Setenv("MEDIA_S3_REGION", "")
+	t.Setenv("MEDIA_S3_BUCKET", "")
+	t.Setenv("MEDIA_S3_ACCESS_KEY", "")
+	t.Setenv("MEDIA_S3_SECRET_KEY", "")
+	t.Setenv("MEDIA_S3_USE_SSL", "")
+	t.Setenv("MEDIA_S3_PATH_STYLE", "")
 	// Empty values fall back to defaults. Clearing avoids leakage from the
 	// process environment.
 
@@ -71,6 +81,27 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.SMTPUsername != "" || cfg.SMTPPassword != "" {
 		t.Error("SMTP auth should be empty by default")
 	}
+	if cfg.MediaDriver != defaultMediaDriver {
+		t.Errorf("MediaDriver = %q, want %q", cfg.MediaDriver, defaultMediaDriver)
+	}
+	if cfg.MediaDir != defaultMediaDir {
+		t.Errorf("MediaDir = %q, want %q", cfg.MediaDir, defaultMediaDir)
+	}
+	if cfg.MediaPublicBaseURL != defaultMediaPublicBaseURL {
+		t.Errorf("MediaPublicBaseURL = %q, want %q", cfg.MediaPublicBaseURL, defaultMediaPublicBaseURL)
+	}
+	if cfg.MediaS3Endpoint != defaultMediaS3Endpoint {
+		t.Errorf("MediaS3Endpoint = %q", cfg.MediaS3Endpoint)
+	}
+	if cfg.MediaS3AccessKey != defaultMediaS3AccessKey || cfg.MediaS3SecretKey != defaultMediaS3SecretKey {
+		t.Error("S3 keys should default to local MinIO friendfold/friendfold")
+	}
+	if cfg.MediaS3UseSSL {
+		t.Error("MediaS3UseSSL = true, want false")
+	}
+	if !cfg.MediaS3PathStyle {
+		t.Error("MediaS3PathStyle = false, want true")
+	}
 }
 
 func TestLoadDefaultsUseComposeHostPorts(t *testing.T) {
@@ -99,6 +130,13 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("SMTP_STARTTLS", "false")
 	t.Setenv("SMTP_USERNAME", "")
 	t.Setenv("SMTP_PASSWORD", "")
+	t.Setenv("MEDIA_DRIVER", "s3")
+	t.Setenv("MEDIA_DIR", "/tmp/media")
+	t.Setenv("MEDIA_PUBLIC_BASE_URL", "https://cdn.example.com/")
+	t.Setenv("MEDIA_S3_ENDPOINT", "http://127.0.0.1:9000")
+	t.Setenv("MEDIA_S3_BUCKET", "friendfold-media")
+	t.Setenv("MEDIA_S3_USE_SSL", "true")
+	t.Setenv("MEDIA_S3_PATH_STYLE", "false")
 
 	cfg, err := Load()
 	if err != nil {
@@ -139,6 +177,21 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.SMTPStartTLS {
 		t.Error("SMTPStartTLS = true, want false")
+	}
+	if cfg.MediaDriver != "s3" {
+		t.Errorf("MediaDriver = %q, want s3", cfg.MediaDriver)
+	}
+	if cfg.MediaDir != "/tmp/media" {
+		t.Errorf("MediaDir = %q", cfg.MediaDir)
+	}
+	if cfg.MediaPublicBaseURL != "https://cdn.example.com" {
+		t.Errorf("MediaPublicBaseURL = %q (trailing slash should be stripped)", cfg.MediaPublicBaseURL)
+	}
+	if !cfg.MediaS3UseSSL {
+		t.Error("MediaS3UseSSL = false, want true")
+	}
+	if cfg.MediaS3PathStyle {
+		t.Error("MediaS3PathStyle = true, want false")
 	}
 }
 
@@ -218,6 +271,13 @@ func TestLoadSMTPStartTLS(t *testing.T) {
 	}
 	if !cfg.SMTPStartTLS {
 		t.Error("SMTPStartTLS = false, want true")
+	}
+}
+
+func TestLoadRejectsInvalidMediaDriver(t *testing.T) {
+	t.Setenv("MEDIA_DRIVER", "gcs")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error for invalid MEDIA_DRIVER")
 	}
 }
 

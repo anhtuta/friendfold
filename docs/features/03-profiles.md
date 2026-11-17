@@ -338,8 +338,8 @@ Acceptance:
 
 ### Phase 3 — Object storage platform
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** https://github.com/anhtuta/friendfold/pull/46 (after https://github.com/anhtuta/friendfold/pull/45)
 
 Work:
 

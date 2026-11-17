@@ -2,7 +2,7 @@
 
 How to run Friendfold on a laptop. Production deploy is later (`docs/deployment/deployment-prod.md` is not written yet).
 
-Compose runs **Postgres, Redis, and Mailpit**. The Go API and Next.js app run **on the host**. Never point this workflow at a production database.
+Compose runs **Postgres, Redis, Mailpit, and MinIO**. The Go API and Next.js app run **on the host**. Never point this workflow at a production database. The API default object store is a **local directory** (`MEDIA_DRIVER=fs`); MinIO is there so `MEDIA_DRIVER=s3` can be exercised without AWS.
 
 From the repo root, `make help` lists targets. This page uses those targets.
 
@@ -11,7 +11,7 @@ From the repo root, `make help` lists targets. This page uses those targets.
 | Tool | Version used here | Notes |
 | --- | --- | --- |
 | Git | any recent | |
-| Docker Engine + Compose v2 | `docker compose` (plugin) | Postgres 16, Redis 7, Mailpit images |
+| Docker Engine + Compose v2 | `docker compose` (plugin) | Postgres 16, Redis 7, Mailpit, MinIO images |
 | Go | **1.22+** module (`backend/go.mod`); CI uses **1.24.x** | goose v3.24.3 and sqlc v1.29.0 auto-select a newer compiler via `GOTOOLCHAIN=auto` |
 | Node.js **22** + pnpm **12.18.0** | CI Node 22; Corepack pin in `frontend/package.json` | `frontend/pnpm-lock.yaml`. `corepack enable` then `corepack prepare pnpm@12.18.0 --activate`. Do not use npm/yarn in `frontend/`. |
 | GNU make | macOS 3.81 or Linux 4.x | `make help` is the default target |
@@ -42,6 +42,7 @@ make frontend   # terminal 2 — http://localhost:3000
 | http://localhost:3000 | Friendfold / Into the fold of friends. |
 | http://localhost:3000/health | `OK` when the API ready check succeeds |
 | http://localhost:8025 | Mailpit UI |
+| http://localhost:9001 | MinIO console (local user `friendfold`) |
 
 Stop Compose with `make down` (volumes stay). Ctrl-C stops `make api` / `make frontend` / `make dev`.
 
@@ -53,6 +54,8 @@ Stop Compose with `make down` (volumes stay). Ctrl-C stops `make api` / `make fr
 | Redis | **6377** | 6379 | Host 6379 is often a local Redis |
 | Mailpit SMTP | 1025 | 1025 | API default `SMTP_HOST` / `SMTP_PORT` |
 | Mailpit UI | 8025 | 8025 | Browser: http://localhost:8025 |
+| MinIO S3 API | 9000 | 9000 | `MEDIA_S3_ENDPOINT` when `MEDIA_DRIVER=s3` |
+| MinIO console | 9001 | 9001 | Browser: http://localhost:9001 |
 | Go API | 8080 | — (host process) | `API_ADDR` default `:8080` |
 | Next.js | 3000 | — (host process) | `PORT` default `3000` |
 
@@ -69,6 +72,7 @@ If an old `.env` still has `127.0.0.1:5432` or `:6379`, the API will miss Compos
 | `postgres` | `postgres:16` | System of record. User `friendfold`, password `friendfold`, db `friendfold`. Volume `postgres_data`. Healthcheck `pg_isready`. |
 | `redis` | `redis:7` | Sessions, cache, rate limits (ready check is `PING`). Healthcheck `redis-cli ping`. |
 | `mailpit` | `axllent/mailpit` | Dev SMTP catcher. No auth. Not for production. |
+| `minio` | `minio/minio` | S3-compatible object storage. User `friendfold`, password `friendfold` (local-only). Volume `minio_data`. Default API driver is still `fs`. |
 
 ```bash
 make up      # docker compose up -d
@@ -149,6 +153,15 @@ Names live in `.env.example`. Empty values fall back to these (see `backend/inte
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | empty | Mailpit has no auth |
 | `SMTP_FROM` | `Friendfold <friendfold@localhost>` | API |
 | `SMTP_STARTTLS` | `false` | API |
+| `MEDIA_DRIVER` | `fs` | `fs` or `s3` ([ADR 0009](../decisions/0009-object-storage.md)) |
+| `MEDIA_DIR` | `data/media` | `fs` driver directory (gitignored) |
+| `MEDIA_PUBLIC_BASE_URL` | `http://localhost:8080/v1/media` | Prefix for `avatarUrl` / `coverUrl` |
+| `MEDIA_S3_ENDPOINT` | `http://127.0.0.1:9000` | MinIO host port |
+| `MEDIA_S3_REGION` | `us-east-1` | SDK region; unused by MinIO |
+| `MEDIA_S3_BUCKET` | `friendfold-media` | Created on first `s3` driver start if missing |
+| `MEDIA_S3_ACCESS_KEY` / `MEDIA_S3_SECRET_KEY` | `friendfold` | Local MinIO root user. Not for production. |
+| `MEDIA_S3_USE_SSL` | `false` | |
+| `MEDIA_S3_PATH_STYLE` | `true` | Required for MinIO |
 | `PORT` | `3000` | Next.js |
 
 ## Other make targets
@@ -182,5 +195,7 @@ CI (GitHub Actions) runs the same backend test/lint/sqlc-diff, frontend typechec
 **Frontend `/health` → API unreachable.** API not running, or `API_BASE_URL` not `http://localhost:8080`.
 
 **`npm install` in `frontend/` fails / “must be installed with pnpm”.** Use Corepack pnpm 12.18.0 (`pnpm install`). Do not commit `package-lock.json`.
+
+**MinIO console login fails / `MEDIA_DRIVER=s3` Put errors.** Host port **9000**. User/password are the local-only Compose values `friendfold` / `friendfold`. Default `MEDIA_DRIVER=fs` does not need MinIO; `make api` still works if MinIO is down.
 
 **`make lint-backend` downloads a lot on first run.** It uses `go run` golangci-lint **v2.4.0** (same pin as CI). Later runs are cached in the module cache.
