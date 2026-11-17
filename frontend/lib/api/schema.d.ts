@@ -291,6 +291,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Own profile
+         * @description Returns the signed-in user's profile, including email and
+         *     `emailVerified`. Creates an empty `profiles` row when none exists
+         *     (`username` is then null until onboarding).
+         *
+         *     Date of birth is never included. Requires a valid session cookie.
+         */
+        get: operations["getMyProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update own profile text fields
+         * @description Updates display name, bio, and/or username. Avatar and cover are
+         *     separate upload endpoints. Unknown JSON fields are rejected. At least
+         *     one field is required.
+         *
+         *     Username is 3–20 characters `[a-z0-9_]`, stored lowercase. Reserved
+         *     names are 400 `username_reserved`. Taken names are 409
+         *     `username_taken`. A change within 14 days of the last successful
+         *     username write is 409 `username_cooldown`. Repeating the current
+         *     username is a no-op and does not refresh the cooldown.
+         *
+         *     Rate limited per user. Origin must match `WEB_ORIGIN`.
+         */
+        patch: operations["patchMyProfile"];
+        trace?: never;
+    };
+    "/v1/me/profile/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload avatar
+         * @description Multipart field `file`. JPEG, PNG, or WebP only; GIF/PDF/SVG rejected.
+         *     Client `Content-Type` and filename are not trusted. Max 5 MiB.
+         *
+         *     The server transcodes to JPEG (quality 85), strips EXIF, and resizes
+         *     so the long edge is at most 1024. Replaces any previous avatar.
+         *
+         *     Rate limited per user. Origin must match `WEB_ORIGIN`.
+         */
+        post: operations["uploadMyAvatar"];
+        /**
+         * Remove avatar
+         * @description Clears the avatar. The UI then shows initials. Origin must match
+         *     `WEB_ORIGIN`.
+         */
+        delete: operations["deleteMyAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/profile/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload cover photo
+         * @description Multipart field `file`. JPEG, PNG, or WebP only. Max 10 MiB. Same
+         *     sniffing and transcode as avatar; long edge at most 2048.
+         *
+         *     Rate limited per user. Origin must match `WEB_ORIGIN`.
+         */
+        post: operations["uploadMyCover"];
+        /**
+         * Remove cover photo
+         * @description Clears the cover photo. Origin must match `WEB_ORIGIN`.
+         */
+        delete: operations["deleteMyCover"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/users/{username}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public profile by username
+         * @description Returns public profile fields for a username (case-insensitive).
+         *     Session cookie is optional.
+         *
+         *     Never includes email, `emailVerified`, date of birth, or
+         *     `usernameChangedAt`. Unknown usernames, deleted accounts, and
+         *     blocked viewer/owner pairs (once friends/blocks exist) all return
+         *     404 `not_found` with the same body.
+         *
+         *     Rate limited per IP.
+         */
+        get: operations["getUserProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/media/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch a stored image
+         * @description Streams object bytes when `MEDIA_PUBLIC_BASE_URL` points at this API
+         *     (local `fs` driver). Production CDNs serve the same keys from the
+         *     bucket instead.
+         *
+         *     `key` is the server-minted object key
+         *     (`profile/{userId}/{kind}/{snowflake}.jpg`). Path traversal and
+         *     unknown keys are 404. Public; no session.
+         */
+        get: operations["getMediaObject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -379,6 +529,55 @@ export interface components {
             currentPassword?: string;
             /** @description 8–72 bytes; must not equal the account email. */
             newPassword: string;
+        };
+        /**
+         * @description 3–20 characters `[A-Za-z0-9_]`. Stored lowercase. Path lookup is
+         *     case-insensitive.
+         */
+        Username: string;
+        PublicProfile: {
+            id: components["schemas"]["SnowflakeId"];
+            username: components["schemas"]["Username"];
+            displayName: string;
+            bio: string;
+            /**
+             * Format: uri
+             * @description Absolute URL composed from MEDIA_PUBLIC_BASE_URL + object key.
+             */
+            avatarUrl: string | null;
+            /** Format: uri */
+            coverUrl: string | null;
+        };
+        MeProfile: {
+            id: components["schemas"]["SnowflakeId"];
+            /** @description Null until the owner claims a username. */
+            username: string | null;
+            displayName: string;
+            bio: string;
+            /** Format: uri */
+            avatarUrl: string | null;
+            /** Format: uri */
+            coverUrl: string | null;
+            /** Format: email */
+            email: string;
+            emailVerified: boolean;
+            /**
+             * Format: date-time
+             * @description UTC time of the last successful username write.
+             */
+            usernameChangedAt: string | null;
+        };
+        PatchProfileRequest: {
+            displayName?: string;
+            bio?: string;
+            username?: components["schemas"]["Username"];
+        };
+        ProfileImageUpload: {
+            /**
+             * Format: binary
+             * @description JPEG, PNG, or WebP image. Field name is `file`.
+             */
+            file: string;
         };
     };
     responses: {
@@ -501,6 +700,68 @@ export interface components {
                 "X-Request-Id": components["headers"]["RequestId"];
                 /** @description Seconds until the client may retry */
                 "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description Profile is missing, the account is deleted, or the viewer is blocked.
+         *     Same body in every case (no existence leak).
+         */
+        ProfileNotFound: {
+            headers: {
+                "X-Request-Id": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description PATCH body failed. `error.code` is `validation_error`,
+         *     `username_invalid`, or `username_reserved`.
+         */
+        ProfilePatchError: {
+            headers: {
+                "X-Request-Id": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description Username cannot be applied. `error.code` is `username_taken` or
+         *     `username_cooldown`.
+         */
+        ProfileConflict: {
+            headers: {
+                "X-Request-Id": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description Upload failed type, magic-byte, decode, or pixel-cap checks.
+         *     `error.code` is `invalid_image` or `validation_error` (missing file).
+         */
+        InvalidImage: {
+            headers: {
+                "X-Request-Id": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description Avatar over 5 MiB or cover over 10 MiB */
+        PayloadTooLarge: {
+            headers: {
+                "X-Request-Id": components["headers"]["RequestId"];
                 [name: string]: unknown;
             };
             content: {
@@ -807,6 +1068,227 @@ export interface operations {
             401: components["responses"]["ChangePasswordUnauthorized"];
             403: components["responses"]["OriginMismatch"];
             429: components["responses"]["RateLimited"];
+        };
+    };
+    getMyProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner profile */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeProfile"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    patchMyProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated owner profile */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeProfile"];
+                };
+            };
+            400: components["responses"]["ProfilePatchError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["OriginMismatch"];
+            409: components["responses"]["ProfileConflict"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    uploadMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ProfileImageUpload"];
+            };
+        };
+        responses: {
+            /** @description Avatar stored; owner profile returned */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeProfile"];
+                };
+            };
+            400: components["responses"]["InvalidImage"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["OriginMismatch"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    deleteMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Avatar cleared; owner profile returned */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeProfile"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["OriginMismatch"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    uploadMyCover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["ProfileImageUpload"];
+            };
+        };
+        responses: {
+            /** @description Cover stored; owner profile returned */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeProfile"];
+                };
+            };
+            400: components["responses"]["InvalidImage"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["OriginMismatch"];
+            413: components["responses"]["PayloadTooLarge"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    deleteMyCover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cover cleared; owner profile returned */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeProfile"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["OriginMismatch"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getUserProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description 3–20 characters `[A-Za-z0-9_]`. Stored and compared lowercase.
+                 * @example minh
+                 */
+                username: components["schemas"]["Username"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Public profile */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProfile"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["ProfileNotFound"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getMediaObject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Object key. Slashes are part of the key. Example values are
+                 *     fake (`example-object`), not production identifiers.
+                 * @example profile/193848201234567890/avatar/example-object.jpg
+                 */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JPEG bytes */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["RequestId"];
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            404: components["responses"]["ProfileNotFound"];
         };
     };
 }

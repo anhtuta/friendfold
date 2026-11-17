@@ -1,6 +1,6 @@
 # Feature 03: Profiles
 
-**Status:** In progress (plan)  
+**Status:** In progress (phase 1)  
 **Owner:** —  
 **Plan version:** 2
 
@@ -303,8 +303,8 @@ Each phase is **one PR**, one concern. Stack on the previous branch; merge **in 
 
 ### Phase 1 — OpenAPI contract
 
-**Status:** Not started  
-**PR:** —
+**Status:** In progress  
+**PR:** https://github.com/anhtuta/friendfold/pull/43 (after https://github.com/anhtuta/friendfold/pull/42)
 
 Work:
 
