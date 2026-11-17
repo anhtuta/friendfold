@@ -359,7 +359,7 @@ Acceptance:
 ### Phase 4 — Profile backend (username, display name, bio)
 
 **Status:** In progress  
-**PR:** (stacked; URL filled when the PR opens)
+**PR:** https://github.com/anhtuta/friendfold/pull/47 (after https://github.com/anhtuta/friendfold/pull/46)
 
 Work:
 
