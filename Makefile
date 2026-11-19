@@ -1,7 +1,7 @@
 # Local development. `make help` is the default.
 # Pins match docs/features/01-project-foundation.md and CI.
 #
-# Host ports (docker-compose.yml): Postgres 5435→5432, Redis 6377→6379.
+# Host ports (docker-compose.yml): Postgres 5435→5432, Redis 6377→6379, RustFS 9000/9001.
 
 GOOSE_VERSION     := v3.24.3
 SQLC_VERSION      := v1.29.0
@@ -33,7 +33,7 @@ help: ## List targets
 		'Usage: make <target>' \
 		'' \
 		'Compose' \
-		'  up              Start Postgres, Redis, Mailpit, MinIO (docker compose up -d)' \
+		'  up              Start Postgres, Redis, Mailpit, RustFS (docker compose up -d)' \
 		'  down            Stop Compose (keeps volumes)' \
 		'  logs            Follow Compose logs' \
 		'' \

@@ -196,7 +196,7 @@ profile/{userId}/{kind}/{snowflake}.jpg
 | `MEDIA_DRIVER` | Default | Behavior |
 | --- | --- | --- |
 | `fs` | **yes (local)** | Files under `MEDIA_DIR` (default `data/media`, gitignored). `Get` reads the file. |
-| `s3` | production; optional local | S3-compatible (MinIO / R2 / AWS). Path-style. Create bucket on startup if missing. |
+| `s3` | production; optional local | S3-compatible (RustFS / R2 / AWS). Path-style. Create bucket on startup if missing. |
 
 Env (names in `.env.example`, values not committed):
 
@@ -205,19 +205,19 @@ Env (names in `.env.example`, values not committed):
 | `MEDIA_DRIVER` | `fs` | `fs` or `s3` |
 | `MEDIA_DIR` | `data/media` | `fs` only; relative to process cwd |
 | `MEDIA_PUBLIC_BASE_URL` | `http://localhost:8080/v1/media` | No trailing slash; CDN in prod |
-| `MEDIA_S3_ENDPOINT` | `http://127.0.0.1:9000` | MinIO host port |
-| `MEDIA_S3_REGION` | `us-east-1` | Required by the SDK; unused by MinIO |
+| `MEDIA_S3_ENDPOINT` | `http://127.0.0.1:9000` | RustFS host port |
+| `MEDIA_S3_REGION` | `us-east-1` | Required by the SDK; unused by local RustFS |
 | `MEDIA_S3_BUCKET` | `friendfold-media` | |
 | `MEDIA_S3_ACCESS_KEY` | empty → local `friendfold` | Local-only default, same idea as Compose Postgres |
 | `MEDIA_S3_SECRET_KEY` | empty → local `friendfold` | |
 | `MEDIA_S3_USE_SSL` | `false` | |
-| `MEDIA_S3_PATH_STYLE` | `true` | MinIO |
+| `MEDIA_S3_PATH_STYLE` | `true` | Required for local RustFS |
 
 Startup: if `MEDIA_DRIVER=fs` and `WEB_ORIGIN` is https, log a warning (not fatal) that production must use `s3`.
 
-MinIO in Compose (phase 3): API **9000**, console **9001**, root user/password **local-only** `friendfold`/`friendfold`. `make up` starts it. Default driver stays `fs` so a down MinIO does not break `make api`. Document `MEDIA_DRIVER=s3` for the production-shaped path.
+RustFS in Compose (phase 3, image `rustfs/rustfs:1.0.3`): API **9000**, console **9001**, access/secret **local-only** `friendfold`/`friendfold`. `make up` starts it. Default driver stays `fs` so a down RustFS does not break `make api`. Document `MEDIA_DRIVER=s3` for the production-shaped path. The API creates the bucket on s3-driver start; there is no init sidecar.
 
-`GET /v1/ready` does not ping MinIO or the disk.
+`GET /v1/ready` does not ping RustFS or the disk.
 
 ### Processing pipeline (in `internal/profile`, in-request)
 
@@ -282,7 +282,7 @@ Dark theme tokens only (`background`, `foreground`, `muted`, `subtle`, `accent`,
 
 - Requires: [01](01-project-foundation.md) shipped; [02](02-accounts.md) **phases 1–3** (user row, session cookie, password flows). **Do not implement 02 phase 4 or 5.**
 - Soft-requires: [04](04-friends.md) for `BlockChecker` (interface + no-op).
-- Tooling: [11](11-local-dev-tooling.md) Makefile / ports; [12](12-frontend-pnpm.md) pnpm. Phase 3 updates Makefile, Compose, and [deployment-local.md](../deployment/deployment-local.md) when MinIO is added.
+- Tooling: [11](11-local-dev-tooling.md) Makefile / ports; [12](12-frontend-pnpm.md) pnpm. Phase 3 updates Makefile, Compose, and [deployment-local.md](../deployment/deployment-local.md) when RustFS is added.
 - Enables: 04 (people to add), 05 (author byline, `ObjectStore` reuse).
 
 ## Implementation phases
@@ -300,6 +300,7 @@ Each phase is **one PR**, one concern. Stack on the previous branch; merge **in 
 7. Phase 6 — Frontend profile page
 8. Phase 7 — Frontend edit + onboarding
 9. Phase 8 — Avatar / cover upload UI
+10. Local S3-compatible Compose service (RustFS): https://github.com/anhtuta/friendfold/pull/52 (after https://github.com/anhtuta/friendfold/pull/51)
 
 ### Phase 1 — OpenAPI contract
 
@@ -343,9 +344,9 @@ Acceptance:
 
 Work:
 
-- `internal/platform/blob`: interface, `fs` driver, `s3` driver, key validation, tests (temp dir; MinIO optional / fake).
+- `internal/platform/blob`: interface, `fs` driver, `s3` driver, key validation, tests (temp dir; RustFS optional / fake).
 - Config + `.env.example` names for `MEDIA_*`.
-- MinIO service in `docker-compose.yml`; gitignore `data/media/`.
+- RustFS service in `docker-compose.yml`; gitignore `data/media/`.
 - Makefile help text if new targets are needed (`make up` already starts Compose).
 - Update [deployment-local.md](../deployment/deployment-local.md) (ports 9000/9001, env table, troubleshooting).
 - No profile HTTP yet.
@@ -354,7 +355,7 @@ Acceptance:
 
 - [ ] Put/Get/Delete round-trip on `fs`.
 - [ ] Invalid keys (`..`, absolute, wrong suffix) rejected.
-- [ ] Compose file includes MinIO; local-only credentials documented.
+- [ ] Compose file includes RustFS; local-only credentials documented.
 
 ### Phase 4 — Profile backend (username, display name, bio)
 
@@ -461,7 +462,7 @@ When **all eight implementation phases are merged**, set this feature **Status**
 - Handler: lazy me, public GET hides email, 404 unknown, 401/403, 409 taken and cooldown, 429 shape, multipart happy path and GIF reject, media GET 200/404, path traversal 404.
 - Authz: blocked viewer 404 once a fake `BlockChecker` returns true; `only_me` N/A here.
 - Frontend: profile found/404, onboarding blocks `/`, settings save, upload control.
-- Manual: `make up && make migrate && make api` + `make frontend`; Mailpit unused. Optional `MEDIA_DRIVER=s3` against Compose MinIO.
+- Manual: `make up && make migrate && make api` + `make frontend`; Mailpit unused. Optional `MEDIA_DRIVER=s3` against Compose RustFS.
 
 ## Open questions
 
@@ -470,7 +471,7 @@ Resolved in this version (v2):
 - **Profile visibility:** **Public.** Posts still honor post privacy in 05.
 - **Username immutability:** **Changeable, 14-day cooldown** after each successful set.
 - **Username vs handle:** **One identifier**, called username, URL `/u/{username}`, UI `@username`.
-- **Where files live in dev:** **`ObjectStore` with `fs` default**; MinIO in Compose for the `s3` driver ([ADR 0009](../decisions/0009-object-storage.md)).
+- **Where files live in dev:** **`ObjectStore` with `fs` default**; RustFS in Compose for the `s3` driver ([ADR 0009](../decisions/0009-object-storage.md)).
 - **Thumbnails:** **One transcoded JPEG per upload** (max long edge). CDN derivatives later.
 - **Columns on `users` vs `profiles`:** **`profiles` table**; display name remains on `users`.
 - **Cooldown HTTP status:** **409 `username_cooldown`**. Rate limits stay 429.

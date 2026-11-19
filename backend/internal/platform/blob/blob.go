@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"regexp"
 	"strings"
 )
@@ -41,7 +40,7 @@ type Config struct {
 	S3            S3Config
 }
 
-// S3Config is the S3-compatible backend (MinIO, R2, AWS).
+// S3Config is the S3-compatible backend (local RustFS, R2, AWS).
 type S3Config struct {
 	Endpoint  string
 	Region    string
@@ -87,26 +86,4 @@ func Open(ctx context.Context, cfg Config) (Store, error) {
 	default:
 		return nil, fmt.Errorf("blob: unknown MEDIA_DRIVER %q (want fs or s3)", cfg.Driver)
 	}
-}
-
-func parseEndpoint(raw string, useSSL bool) (endpoint string, secure bool, err error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", false, fmt.Errorf("blob: S3 endpoint is required")
-	}
-	if !strings.Contains(raw, "://") {
-		return raw, useSSL, nil
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		return "", false, fmt.Errorf("blob: parse S3 endpoint: %w", err)
-	}
-	if u.Host == "" {
-		return "", false, fmt.Errorf("blob: S3 endpoint host is empty")
-	}
-	secure = u.Scheme == "https"
-	if u.Scheme == "http" {
-		secure = false
-	}
-	return u.Host, secure, nil
 }
