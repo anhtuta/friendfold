@@ -300,7 +300,7 @@ Each phase is **one PR**, one concern. Stack on the previous branch; merge **in 
 7. Phase 6 — Frontend profile page
 8. Phase 7 — Frontend edit + onboarding
 9. Phase 8 — Avatar / cover upload UI
-10. Local S3-compatible Compose service (RustFS; after #51)
+10. Local S3-compatible Compose service (RustFS): https://github.com/anhtuta/friendfold/pull/52 (after https://github.com/anhtuta/friendfold/pull/51)
 
 ### Phase 1 — OpenAPI contract
 
