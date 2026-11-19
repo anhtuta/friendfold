@@ -10,6 +10,6 @@ alwaysApply: true
 - **Authorization:** every endpoint declares who may call it. Resource checks happen in the service layer (owner, friend, not blocked, admin). Missing authz is a bug, not a follow-up. For hidden resources return **404**, not 403, so privacy settings do not leak existence.
 - **Passwords:** argon2id only (memory-hard parameters documented in the auth module). Never log passwords, tokens, or session IDs. Google-only accounts have a NULL password hash.
 - **Sessions:** server-side in Redis; opaque session ID in an `HttpOnly; Secure; SameSite=Lax` cookie. Rotate on login and on password change. Revoke on logout and on password reset.
-- **Uploads:** allowlist image MIME types, cap size, transcode/strip metadata before serving, store in object storage (local disk or MinIO in dev). No user-controlled file served from the API process.
+- **Uploads:** allowlist image MIME types, cap size, transcode/strip metadata before serving, store in object storage (local disk or S3-compatible RustFS in dev). No user-controlled file served from the API process.
 - **Injection:** parameterized SQL via sqlc/pgx only. No string-built queries.
 - Treat user content as untrusted in the UI (React's default escaping; never `dangerouslySetInnerHTML` for post bodies).

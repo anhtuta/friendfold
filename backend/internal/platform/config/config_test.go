@@ -94,7 +94,7 @@ func TestLoadDefaults(t *testing.T) {
 		t.Errorf("MediaS3Endpoint = %q", cfg.MediaS3Endpoint)
 	}
 	if cfg.MediaS3AccessKey != defaultMediaS3AccessKey || cfg.MediaS3SecretKey != defaultMediaS3SecretKey {
-		t.Error("S3 keys should default to local MinIO friendfold/friendfold")
+		t.Error("S3 keys should default to local RustFS friendfold/friendfold")
 	}
 	if cfg.MediaS3UseSSL {
 		t.Error("MediaS3UseSSL = true, want false")

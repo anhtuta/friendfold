@@ -1,6 +1,6 @@
 # Local development only. The default Postgres password is not for production.
 # Host ports: Postgres 5435, Redis 6377 (containers stay 5432 / 6379).
-# MinIO S3 API 9000, console 9001 (local-only credentials).
+# RustFS S3 API 9000, console 9001 (local-only credentials).
 name: friendfold
 
 services:
@@ -36,20 +36,34 @@ services:
       - "1025:1025"
       - "8025:8025"
 
-  # Local-only S3 API. Root user/password are not for production.
+  # Local-only S3 API (RustFS 1.0). Access/secret are not for production.
   # Default API driver is still fs; set MEDIA_DRIVER=s3 to use this.
-  minio:
-    image: minio/minio
-    command: ["server", "/data", "--console-address", ":9001"]
+  # Named volume: no host bind-mount, so no extra chown for user 10001.
+  # The API creates MEDIA_S3_BUCKET on s3-driver startup (no init sidecar).
+  rustfs:
+    image: rustfs/rustfs:1.0.3
+    user: "10001:10001"
     ports:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: friendfold
-      MINIO_ROOT_PASSWORD: friendfold
+      RUSTFS_ACCESS_KEY: friendfold
+      RUSTFS_SECRET_KEY: friendfold
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_VOLUMES: /data
+      RUSTFS_OBS_LOGGER_LEVEL: error
     volumes:
-      - minio_data:/data
+      - rustfs_data:/data
+    command: ["/data"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
 volumes:
   postgres_data:
-  minio_data:
+  rustfs_data:

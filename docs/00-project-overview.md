@@ -164,17 +164,17 @@ MVP (local and first production):
     │  cookie session               │  /v1/*  from OpenAPI
     └─────────────HTTPS─────────────┤
                                     │
-                    ┌───────────────┼───────────────┐
-                    ▼               ▼               ▼
-               PostgreSQL         Redis          Mailpit (dev)
-               (primary;          sessions,      SMTP catcher
-                replicas later)   cache,         (prod: SES or
+                    ┌───────────────┼───────────────┬───────────────┐
+                    ▼               ▼               ▼               ▼
+               PostgreSQL         Redis          Mailpit (dev)   RustFS (dev)
+               (primary;          sessions,      SMTP catcher    S3 API :9000
+                replicas later)   cache,         (prod: SES or   (prod: S3/R2)
                                   counters,      equivalent)
                                   rate limits,
                                   timelines
 ```
 
-Media (from posts/profiles): object storage behind `ObjectStore` ([ADR 0009](decisions/0009-object-storage.md); filesystem default locally, MinIO for the S3 driver; S3 or Cloudflare R2 in prod) + CDN. The API never serves raw user files from its own disk in production.
+Media (from posts/profiles): object storage behind `ObjectStore` ([ADR 0009](decisions/0009-object-storage.md); filesystem default locally, RustFS for the S3 driver; S3 or Cloudflare R2 in prod) + CDN. The API never serves raw user files from its own disk in production.
 
 Later topology (not MVP, do not build now):
 
@@ -214,7 +214,7 @@ Do not create `frontend/` or `backend/` until [feature 01](features/01-project-f
     └── db/queries/           # sqlc
 ```
 
-Local Docker Compose (created in 01): Postgres, Redis, Mailpit. CI: GitHub Actions.
+Local Docker Compose: Postgres, Redis, Mailpit (feature 01), plus RustFS for the local S3 driver (feature 03). CI: GitHub Actions.
 
 ## Roadmap
 

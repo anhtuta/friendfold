@@ -57,7 +57,7 @@ const (
 	defaultMediaS3Endpoint    = "http://127.0.0.1:9000"
 	defaultMediaS3Region      = "us-east-1"
 	defaultMediaS3Bucket      = "friendfold-media"
-	// Local Compose MinIO (docker-compose.yml). Not for production.
+	// Local Compose RustFS (docker-compose.yml). Not for production.
 	defaultMediaS3AccessKey = "friendfold"
 	defaultMediaS3SecretKey = "friendfold"
 

@@ -121,6 +121,27 @@ func TestOpenUnknownDriver(t *testing.T) {
 	}
 }
 
+func TestEndpointURL(t *testing.T) {
+	t.Parallel()
+	got, err := endpointURL("127.0.0.1:9000", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "http://127.0.0.1:9000" {
+		t.Errorf("got %q", got)
+	}
+	got, err = endpointURL("http://127.0.0.1:9000", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "http://127.0.0.1:9000" {
+		t.Errorf("scheme from URL should win, got %q", got)
+	}
+	if _, err := endpointURL("", false); err == nil {
+		t.Fatal("empty endpoint should fail")
+	}
+}
+
 func TestS3OptionalRoundTrip(t *testing.T) {
 	endpoint := os.Getenv("MEDIA_S3_ENDPOINT")
 	if endpoint == "" {
